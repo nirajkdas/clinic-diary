@@ -83,7 +83,10 @@ create policy records_rw on public.records for all using (public.is_member(clini
 drop policy if exists push_own on public.push_subs;
 create policy push_own on public.push_subs for all using (user_id = auth.uid()) with check (user_id = auth.uid() and public.is_member(clinic_id));
 
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
+-- Server functions use the service role; give it full access explicitly (new projects may not auto-grant).
+grant all on public.clinics, public.members, public.records, public.push_subs, public.app_keys to service_role;
+grant execute on function public.create_clinic(text), public.is_member(uuid) to service_role;
 grant select, insert, update, delete on public.clinics, public.records, public.push_subs to authenticated;
 grant select on public.members to authenticated;
 grant execute on function public.create_clinic(text) to authenticated;
