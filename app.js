@@ -35,6 +35,11 @@ const KINDS=['patients','appts','fus','leads','calls'];
 const LST={new:'New',callback:'Call back',booked:'Booked',lost:'Not interested'};
 const RULES=[['Checkup','चेकअप',180],['Scaling / cleaning','दाँतों की सफ़ाई',180],['Filling','फिलिंग',180],['RCT sitting','RCT सिटिंग',7],['Cap after RCT','RCT के बाद कैप',14],['Extraction','दाँत निकालना',7],['Crown fitting','क्राउन फिटिंग',7],['Braces adjustment','ब्रेसेस एडजस्टमेंट',30],['Pain / emergency','दर्द का इलाज',3]];
 const TPL={
+missed:'नमस्ते! आपने {clinic} ({address_hi}) में कॉल किया था। उस समय डॉक्टर मरीज़ देख रही थीं, इसलिए कॉल नहीं उठ पाया।\nअपॉइंटमेंट के लिए खाली समय:\n{slots_hi}\nजो समय ठीक लगे, इसी नंबर पर जवाब दें।\n\nHello! You called {clinic}, {address}. The doctor was with a patient, so we could not take your call.\nAvailable slots:\n{slots}\nJust reply here with the time that suits you.\n\n– {doctor}',
+remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} ({address_hi}) में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic}, {address} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
+follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
+noshow:'नमस्ते {name} जी,\nआज {time_hi} बजे आपका अपॉइंटमेंट था, आप नहीं आ पाए। कोई बात नहीं, नया समय चाहिए तो इसी नंबर पर बता दें।\n\nHello {name},\nWe missed you at your {time} appointment today. No problem, reply here if you would like a new time.\n\n– {doctor}'};
+const OLD_TPL={
 missed:'नमस्ते! आपने {clinic} में कॉल किया था। उस समय डॉक्टर मरीज़ देख रही थीं, इसलिए कॉल नहीं उठ पाया।\nअपॉइंटमेंट के लिए खाली समय:\n{slots_hi}\nजो समय ठीक लगे, इसी नंबर पर जवाब दें।\n\nHello! You called {clinic}. The doctor was with a patient, so we could not take your call.\nAvailable slots:\n{slots}\nJust reply here with the time that suits you.\n\n– {doctor}',
 remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
 follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
@@ -47,7 +52,7 @@ function seed(){
   const F=(i,due,tr)=>({id:uid(),pid:P[i].id,due,tr,done:false});
   const n=Date.now();
   return {demo:true,at:0,
-    set:{clinic:'Smile Dental Clinic',doctor:'Dr. Neha',open:'10:00',close:'19:00',ls:'14:00',le:'16:00',slot:30,off:'0'},
+    set:{clinic:'Gupta Dental Care & Hospital',addr:'Mangal Bazar, Katihar',addr_hi:'मंगल बाज़ार, कटिहार',doctor:'Dr. Gupta',open:'10:00',close:'19:00',ls:'14:00',le:'16:00',slot:30,off:'0'},
     rules:RULES.map(r=>({n:r[0],hi:r[1],d:r[2]})),tpl:{...TPL},patients:P,
     appts:[A(0,TODAY,'10:00','RCT sitting','done'),A(1,TODAY,'11:00','Checkup'),A(4,TODAY,'12:30','Cap after RCT'),A(5,TODAY,'17:00','Braces adjustment'),A(6,TODAY,'18:00','Scaling / cleaning'),
       A(2,TOM,'10:30','RCT sitting'),A(3,TOM,'11:30','Filling'),A(7,TOM,'17:30','Scaling / cleaning'),A(0,addD(TODAY,7),'10:00','RCT sitting')],
@@ -66,6 +71,9 @@ let S=null;
 try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 if(!S)S=seed();
 for(const k of KINDS)if(!Array.isArray(S[k]))S[k]=[];
+if(!S.set.addr){S.set.addr='Mangal Bazar, Katihar';S.set.addr_hi='मंगल बाज़ार, कटिहार'}
+if(S.demo||/^(Smile Dental Clinic|My Dental Clinic)$/.test(S.set.clinic)){S.set.clinic='Gupta Dental Care & Hospital';if(/^Dr\. (Neha)?$/.test(S.set.doctor))S.set.doctor='Dr. Gupta'}
+for(const k of Object.keys(TPL))if(!S.tpl[k]||S.tpl[k]===OLD_TPL[k])S.tpl[k]=TPL[k];
 function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function save(){S.at=Date.now();saveLocal();schedulePush()}
 
@@ -108,14 +116,14 @@ function applyRemote(rows,cl){
 async function connect(){
   try{
     cloudMsg='Connecting…';render();
-    const{data:id,error}=await sb.rpc('create_clinic',{clinic_name:S.demo?'My Dental Clinic':S.set.clinic});if(error)throw error;
+    const{data:id,error}=await sb.rpc('create_clinic',{clinic_name:S.set.clinic});if(error)throw error;
     cid=id;
     const{data:cl,error:e2}=await sb.from('clinics').select('*').eq('id',cid).single();if(e2)throw e2;
     clinicRow=cl;
     const rows=await pullAll();
     if(rows.length||(cl.settings&&cl.settings.set)){applyRemote(rows,cl)}
     else{ // brand-new clinic: upload what is on this phone (sample data is dropped)
-      if(S.demo){const keep={rules:S.rules,tpl:S.tpl};S={...blank(),...keep,set:{...S.set,clinic:'My Dental Clinic',doctor:'Dr. '}}}
+      if(S.demo){const keep={rules:S.rules,tpl:S.tpl};S={...blank(),...keep,set:{...S.set}}}
       snap={};setSnap='';saveLocal();await pushNow();
     }
     listen();cloudMsg='';syncState='ok';
@@ -167,7 +175,7 @@ function slots(date){const s=S.set;if(String(D(date).getDay())===String(s.off))r
 const busy=(d,t)=>S.appts.find(a=>a.date===d&&a.time===t&&a.status!=='cancel');
 const freeSlots=d=>slots(d).filter(t=>!busy(d,t)&&(d!==TODAY||tm(t)>nowM()+20));
 function nextFree(n){const o=[];for(let i=0;i<14&&o.length<n;i++){const d=addD(TODAY,i);for(const t of freeSlots(d)){o.push([d,t]);if(o.length>=n)break}}return o}
-const base=()=>({clinic:S.set.clinic,doctor:S.set.doctor});
+const base=()=>({clinic:S.set.clinic,doctor:S.set.doctor,address:S.set.addr||'',address_hi:S.set.addr_hi||S.set.addr||''});
 const apptVars=a=>{const p=pt(a.pid);return {...base(),name:p.name,date:dateEn(a.date),date_hi:dateHi(a.date),time:t12(a.time),time_hi:tHi(a.time),treatment:a.tr,treatment_hi:trHi(a.tr)}};
 const wa=(ph,txt)=>'https://wa.me/'+norm(ph)+'?text='+encodeURIComponent(txt);
 const msgRemind=a=>fill(S.tpl.remind,apptVars(a));
@@ -294,14 +302,14 @@ function vPatients(){
 
 function vSettings(){
   const s=S.set,F=(k,l,t='text')=>`<div><label for="s_${k}">${l}</label><input id="s_${k}" type="${t}" data-set="${k}" value="${esc(s[k])}"></div>`;
-  return `<h2>Clinic</h2><div class="two">${F('clinic','Clinic name')}${F('doctor','Doctor name')}${F('open','Opens at','time')}${F('close','Closes at','time')}${F('ls','Break starts','time')}${F('le','Break ends','time')}
+  return `<h2>Clinic</h2><div class="two">${F('clinic','Clinic name')}${F('doctor','Doctor name')}${F('addr','Address (English)')}${F('addr_hi','Address (Hindi)')}${F('open','Opens at','time')}${F('close','Closes at','time')}${F('ls','Break starts','time')}${F('le','Break ends','time')}
   <div><label for="s_slot">Slot length (minutes)</label><select id="s_slot" data-set="slot">${[15,20,30,45,60].map(n=>`<option ${+s.slot===n?'selected':''}>${n}</option>`).join('')}</select></div>
   <div><label for="s_off">Weekly off</label><select id="s_off" data-set="off"><option value="-1">None</option>${DAYF.map((d,i)=>`<option value="${i}" ${String(s.off)===String(i)?'selected':''}>${d}</option>`).join('')}</select></div></div>
   <h2>Treatments and follow-ups</h2><p class="mut" style="margin:0 0 8px">When you tap "Came", the next follow-up is created this many days later. These are starting guesses, so change them to match your practice. The Hindi name is used in patient messages.</p>
   <div class="rule mut" style="font-size:14px"><span>Treatment / Hindi name</span><span>Days</span><span></span></div>
   ${S.rules.map((r,i)=>`<div class="rule"><div style="display:grid;gap:4px"><input aria-label="Treatment" data-rule="${i}" data-k="n" value="${esc(r.n)}"><input aria-label="Hindi name" data-rule="${i}" data-k="hi" value="${esc(r.hi||'')}" placeholder="Hindi name"></div><input aria-label="Days" type="number" inputmode="numeric" data-rule="${i}" data-k="d" value="${r.d}"><button class="b sm ghost" data-a="rdel" data-id="${i}" aria-label="Remove">✕</button></div>`).join('')}
   <button class="b sm" data-a="radd">+ Add treatment</button>
-  <h2>WhatsApp messages (Hindi + English)</h2><p class="mut" style="margin:0">These words are replaced with real details: {name} {date} {date_hi} {time} {time_hi} {treatment} {treatment_hi} {slots} {slots_hi} {clinic} {doctor}</p>
+  <h2>WhatsApp messages (Hindi + English)</h2><p class="mut" style="margin:0">These words are replaced with real details: {name} {date} {date_hi} {time} {time_hi} {treatment} {treatment_hi} {slots} {slots_hi} {clinic} {address} {address_hi} {doctor}</p>
   ${Object.keys(TPL).map(k=>`<label for="t_${k}">${TPLN[k]}</label><textarea id="t_${k}" data-tpl="${k}" style="min-height:220px">${esc(S.tpl[k])}</textarea><button class="b sm ghost" data-a="treset" data-id="${k}">Reset to default</button>`).join('')}
   ${vCloud()}
   <h2>Backup</h2><p class="mut" style="margin:0 0 8px">${cid?'Everything is saved to the cloud as you work.':'Saved on this phone only. Copy a backup every week.'}</p>
@@ -413,7 +421,7 @@ document.addEventListener('click',e=>{
     case 'rdel':S.rules.splice(+id,1);save();render();break;
     case 'treset':S.tpl[id]=TPL[id];save();render();toast('Message reset');break;
     case 'copy':navigator.clipboard?.writeText(JSON.stringify(S)).then(()=>toast('Backup copied'),()=>toast('Could not copy'));break;
-    case 'wipe':if(el.dataset.sure){const keep={rules:S.rules,tpl:S.tpl};S={...blank(),...keep,set:S.demo?{...S.set,clinic:'My Dental Clinic',doctor:'Dr. '}:S.set};save();tab='settings';render();toast('All clear. Now add your clinic name and timings')}else{el.dataset.sure=1;el.textContent='Sure? Tap again';setTimeout(()=>{if(el.isConnected){delete el.dataset.sure;el.textContent='Clear everything'}},4000)}break;
+    case 'wipe':if(el.dataset.sure){const keep={rules:S.rules,tpl:S.tpl};S={...blank(),...keep,set:S.set};save();tab='settings';render();toast('All clear. Now add your clinic name and timings')}else{el.dataset.sure=1;el.textContent='Sure? Tap again';setTimeout(()=>{if(el.isConnected){delete el.dataset.sure;el.textContent='Clear everything'}},4000)}break;
   }
 });
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;

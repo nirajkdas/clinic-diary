@@ -6,7 +6,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.clinics (
   id            uuid primary key default gen_random_uuid(),
-  name          text not null default 'My Dental Clinic',
+  name          text not null default 'Gupta Dental Care & Hospital',
   settings      jsonb not null default '{}'::jsonb,          -- {set, rules, tpl} from the app
   connect_to    text,                                       -- phone that the clinic line rings (her personal number)
   webhook_token text not null unique default encode(gen_random_bytes(18), 'hex'),
@@ -63,7 +63,7 @@ begin
   if auth.uid() is null then raise exception 'not signed in'; end if;
   select m.clinic_id into cid from public.members m where m.user_id = auth.uid() limit 1;
   if cid is not null then return cid; end if;
-  insert into public.clinics(name) values (coalesce(nullif(clinic_name,''),'My Dental Clinic')) returning id into cid;
+  insert into public.clinics(name) values (coalesce(nullif(clinic_name,''),'Gupta Dental Care & Hospital')) returning id into cid;
   insert into public.members(clinic_id, user_id, role) values (cid, auth.uid(), 'owner');
   return cid;
 end $$;
