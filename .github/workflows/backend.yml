@@ -1,0 +1,89 @@
+name: Deploy backend
+
+# Runs whenever backend code changes, or by hand from the Actions tab.
+# Needs: repository secret SUPABASE_ACCESS_TOKEN and repository variable SUPABASE_PROJECT_REF.
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/**", ".github/workflows/backend.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: backend-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SITE: https://nirajkdas.github.io/clinic-diary/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Supabase is connected
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$REF" ]; then
+            echo "::warning::Supabase is not connected yet (add SUPABASE_ACCESS_TOKEN secret and SUPABASE_PROJECT_REF variable). Skipping."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Database tables and security rules
+        if: env.SKIP != '1'
+        run: |
+          for f in supabase/migrations/*.sql; do
+            jq -n --rawfile q "$f" '{query:$q}' > /tmp/body.json
+            curl -sS --fail-with-body -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @/tmp/body.json > /tmp/out.json \
+              || { cat /tmp/out.json; exit 1; }
+            echo "applied $f"
+          done
+
+      - name: Login emails send a 6-digit code (works inside the Home Screen app)
+        if: env.SKIP != '1'
+        run: |
+          jq -n --arg site "$SITE" '{
+            site_url: $site,
+            uri_allow_list: $site,
+            mailer_subjects_magic_link: "Your Clinic Diary sign-in code",
+            mailer_templates_magic_link_content: "<p>Your Clinic Diary sign-in code is</p><h2>{{ .Token }}</h2><p>Type it in the app. It expires in one hour.</p>",
+            mailer_subjects_confirmation: "Your Clinic Diary sign-in code",
+            mailer_templates_confirmation_content: "<p>Your Clinic Diary sign-in code is</p><h2>{{ .Token }}</h2><p>Type it in the app. It expires in one hour.</p>"
+          }' > /tmp/auth.json
+          curl -sS --fail-with-body -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @/tmp/auth.json > /dev/null
+          echo "auth email updated"
+
+      - uses: supabase/setup-cli@v1
+        if: env.SKIP != '1'
+        with:
+          version: latest
+
+      - name: Server functions
+        if: env.SKIP != '1'
+        run: |
+          supabase functions deploy exotel --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy push-key --project-ref "$REF" --no-verify-jwt
+
+      - name: Point the app at this project
+        if: env.SKIP != '1'
+        run: |
+          curl -sS --fail-with-body "https://api.supabase.com/v1/projects/$REF/api-keys" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" > /tmp/keys.json
+          ANON=$(jq -r '[.[] | select(.name=="anon")][0].api_key // empty' /tmp/keys.json)
+          [ -n "$ANON" ] || { echo "no anon key found"; exit 1; }
+          cat > config.js <<EOF
+          // Written by the "Deploy backend" workflow. Both values are public (safe to commit).
+          window.CLINIC_CFG = {
+            url: "https://$REF.supabase.co",
+            anon: "$ANON"
+          };
+          EOF
+          if ! git diff --quiet config.js; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Connect app to Supabase project" config.js
+            git push
+          fi

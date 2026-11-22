@@ -1,0 +1,7 @@
+# Exotel cannot send a Supabase login token, and the app fetches the push key before sign-in,
+# so these two functions check their own access (webhook token / public data only).
+[functions.exotel]
+verify_jwt = false
+
+[functions.push-key]
+verify_jwt = false
