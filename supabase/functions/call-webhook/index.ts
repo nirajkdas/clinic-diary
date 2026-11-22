@@ -29,9 +29,13 @@ Deno.serve(async (req) => {
     const expected = "sha256=" + await hmacHex(clinic.webhook_token, raw);
     if (!same(sigHeader.trim(), expected)) return new Response("bad signature", { status: 401 });
   }
-  // Ignore Edesy events that are not about a finished call (e.g. test pings, recording notices).
-  if (q.event && /\./.test(q.event) && !/completed|ended/.test(q.event)) return new Response("ignored", { status: 200 });
-  if (q.event && /\./.test(q.event)) q.event = "end";
+  // Edesy sends named events like call.completed / call.missed / call.ringing.
+  if (q.event && /\./.test(q.event)) {
+    const e = q.event.toLowerCase();
+    if (/recording|test|ping/.test(e)) return new Response("ignored", { status: 200 });
+    if (/missed/.test(e) && !q.status) q.status = "no-answer";
+    q.event = /ringing|initiated|queued|answered|in.?progress|started/.test(e) && !/completed|ended|missed/.test(e) ? "start" : "end";
+  }
 
   const ev = readEvent(q);
   const [{ data: prevRow }, { data: pats }, { data: lds }] = await Promise.all([

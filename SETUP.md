@@ -53,8 +53,8 @@ Steps:
 1. Doctor signs up at https://voice-app.edesy.in, completes KYC with clinic documents, buys one **mobile** number,
    and adds wallet balance.
 2. Forwarding rule on that number: ring her mobile, **Caller ID → Original caller**, hold audio **off**.
-3. **Webhooks → Add subscription**: paste the **Webhook URL** and **Signing secret** from the app
-   (Settings → Cloud and clinic line → Call provider settings). Leave event types empty. Press **Test**.
+3. **Webhooks → Add endpoint**: paste the **Webhook URL** from the app
+   (Settings → Cloud and clinic line → Call provider settings). Select all call events. (Edesy signs with its own account secret; our URL token is what authenticates.)
 4. Put the Edesy number on the Google Ads call ad. Keep WhatsApp on the clinic number as it is.
 5. On the clinic Jio SIM, send missed calls to the Edesy number:
    - no answer: dial `*403*<Edesy number 10 digits>`  (turn off: `*404`)

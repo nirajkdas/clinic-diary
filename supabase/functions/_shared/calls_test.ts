@@ -65,3 +65,9 @@ Deno.test("Edesy payload: answered and unanswered calls", () => {
   const busy = { t: "x", call_sid: "CA_3", caller: "+919811122255", status: "busy" };
   assertEquals(applyEvent(null, readEvent(busy), pats, [], busy).call.status, "missed");
 });
+
+Deno.test("Edesy call.completed sample (from / duration fields)", () => {
+  const q = { t: "x", event: "end", call_sid: "CA1234567890abcdef", from: "+919876543210", to: "+911234567890", status: "completed", duration: "125" };
+  const r = applyEvent(null, readEvent(q), pats, [], q);
+  assertEquals([r.call.status, r.call.dur, r.call.phone], ["answered", 125, "9876543210"]);
+});
