@@ -28,13 +28,13 @@ Missed call on the clinic Jio number ──(*403 / *405 forwarding)──► sam
    - **Variables** tab → New variable: `SUPABASE_PROJECT_REF` = the project ref.
 4. Open **Actions → Deploy backend → Run workflow**.
 
-The workflow creates the tables and security rules, sets up code-based login emails, deploys the server functions,
+The workflow creates the tables and security rules, deploys the server functions,
 and writes `config.js` so the live app connects to the project. Re-running it is safe.
 
 ## 2. Doctor's phone (2 minutes)
 
 1. Open the app link in **Safari** → Share → **Add to Home Screen**. Open it from the icon.
-2. Settings → **Cloud and clinic line** → enter email → type the 6-digit code from the email.
+2. Settings → **Cloud and clinic line** → enter email → enter email + password, tap **Create account** (first time) or **Sign in**.
    (First sign-in on a phone with real data uploads it. Sample data is dropped.)
 3. Tap **Turn on notifications** and allow.
 

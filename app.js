@@ -80,7 +80,7 @@ function save(){S.at=Date.now();saveLocal();schedulePush()}
 
 /* ---------- Cloud: login, sync, live updates, notifications ---------- */
 const CFG=window.CLINIC_CFG||{};
-let sb=null,user=null,cid=null,clinicRow=null,snap={},setSnap='',pushT=0,chan=null,cloudMsg='',syncState='',otpEmail='',pushOn=false;
+let sb=null,user=null,cid=null,clinicRow=null,snap={},setSnap='',pushT=0,chan=null,cloudMsg='',syncState='',pushOn=false;
 const cloudReady=()=>!!(CFG.url&&CFG.anon&&window.supabase&&window.supabase.createClient);
 const settingsJSON=()=>JSON.stringify({set:S.set,rules:S.rules,tpl:S.tpl});
 const SEP='\u0001';
@@ -320,8 +320,9 @@ function vSettings(){
 function vCloud(){
   if(!cloudReady())return `<h2>Cloud and clinic line</h2><p class="mut" style="margin:0">Not set up yet. Once it is, you can sign in here to save everything online and get calls in the app by themselves.</p>`;
   if(!user)return `<h2>Cloud and clinic line</h2><p class="mut" style="margin:0 0 4px">Sign in to save everything online and receive clinic calls in the app.</p>
-    ${otpEmail?`<form id="otpF"><label for="oCode">Code sent to ${esc(otpEmail)}</label><input id="oCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required><div class="row" style="margin-top:10px"><button class="b pri" type="submit">Sign in</button><button type="button" class="b ghost" data-a="otpback">Use another email</button></div></form>`
-    :`<form id="emailF"><label for="oEmail">Email</label><input id="oEmail" type="email" autocomplete="email" required><div class="row" style="margin-top:10px"><button class="b pri" type="submit">Send code</button></div></form>`}
+    <form id="authF"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="username" required>
+    <label for="aPass">Password (at least 8 characters)</label><input id="aPass" type="password" autocomplete="current-password" minlength="8" required>
+    <div class="row" style="margin-top:10px"><button class="b pri" type="submit" data-mode="in">Sign in</button><button class="b" type="submit" data-mode="up">Create account</button></div></form>
     ${cloudMsg?`<p class="mut">${esc(cloudMsg)}</p>`:''}`;
   const tok=clinicRow?clinicRow.webhook_token:'',base=CFG.url+'/functions/v1/call-webhook?t='+tok;
   return `<h2>Cloud and clinic line</h2><p style="margin:0">Signed in as <b>${esc(user.email||'')}</b>. ${syncState==='offline'?'<span class="tag hot">Offline, will retry</span>':'<span class="tag">Synced</span>'}</p>
@@ -393,7 +394,6 @@ document.addEventListener('click',e=>{
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
     case 'push':enablePush();break;
-    case 'otpback':otpEmail='';render();break;
     case 'signout':sb.auth.signOut();break;
     case 'saveto':{const v=$('#cTo').value.trim();sb.from('clinics').update({connect_to:v}).eq('id',cid).then(({error})=>{if(error)toast('Could not save');else{clinicRow.connect_to=v;toast('Saved')}});break}
     case 'copytxt':navigator.clipboard?.writeText(id).then(()=>toast('Copied'),()=>toast('Could not copy'));break;
@@ -429,8 +429,13 @@ document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
   if(f.id==='addLead'){const ph=$('#lPh').value;if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');const ex=S.patients.find(p=>norm(p.phone)===norm(ph));S.leads.push({id:uid(),phone:ph.trim(),name:ex?ex.name:'',src:$('#lSrc').value,at:Date.now(),status:'new',tries:0,note:ex?'Existing patient':''});lf='open';save();render();toast('Lead added')}
   if(f.id==='bookF')doBook();
   if(f.id==='logF'){const ph=$('#gPh').value;if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');const c={id:uid(),phone:String(ph).replace(/\D/g,'').slice(-10),at:Date.now(),status:'answered',dur:0,outcome:null,manual:true,note:$('#gNote').value.trim()};S.calls.push(c);save();tab='calls';render();openCall(c.id)}
-  if(f.id==='emailF'){const em=$('#oEmail').value.trim();cloudMsg='Sending code…';render();sb.auth.signInWithOtp({email:em,options:{shouldCreateUser:true,emailRedirectTo:location.origin+location.pathname}}).then(({error})=>{if(error){cloudMsg=error.message}else{otpEmail=em;cloudMsg='Check your email for the code.'}render()})}
-  if(f.id==='otpF'){const code=$('#oCode').value.trim();cloudMsg='Signing in…';render();sb.auth.verifyOtp({email:otpEmail,token:code,type:'email'}).then(({error})=>{if(error){cloudMsg=error.message;render()}else{otpEmail='';cloudMsg=''}})}
+  if(f.id==='authF'){const mode=(e.submitter&&e.submitter.dataset.mode)||'in',em=$('#aEmail').value.trim(),pw=$('#aPass').value;
+    cloudMsg=mode==='up'?'Creating account…':'Signing in…';render();
+    (mode==='up'?sb.auth.signUp({email:em,password:pw}):sb.auth.signInWithPassword({email:em,password:pw})).then(({data,error})=>{
+      if(error)cloudMsg=error.message==='Invalid login credentials'?'Wrong email or password. New here? Tap Create account.':error.message;
+      else if(!data.session)cloudMsg='Account created. Please sign in.';
+      else cloudMsg='';
+      render()})}
   if(f.id==='doneF'){const x=S.appts.find(a=>a.id===ctx.aid);const no=$('#dNo').checked,nx=$('#dNx').value;x.status='done';x.tr=$('#dTr').value;if(!no)S.fus.push({id:uid(),pid:x.pid,due:nx,tr:x.tr,done:false});save();close();render();toast(no?'Saved':'Follow-up set: '+rel(nx))}
 });
 document.addEventListener('change',e=>{const t=e.target;

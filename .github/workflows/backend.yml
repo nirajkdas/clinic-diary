@@ -41,23 +41,6 @@ jobs:
             echo "applied $f"
           done
 
-      - name: Login emails send a 6-digit code (works inside the Home Screen app)
-        if: env.SKIP != '1'
-        continue-on-error: true   # needs Auth Config permission on the token; can also be set in the dashboard
-        run: |
-          jq -n --arg site "$SITE" '{
-            site_url: $site,
-            uri_allow_list: $site,
-            mailer_subjects_magic_link: "Your Clinic Diary sign-in code",
-            mailer_templates_magic_link_content: "<p>Your Clinic Diary sign-in code is</p><h2>{{ .Token }}</h2><p>Type it in the app. It expires in one hour.</p>",
-            mailer_subjects_confirmation: "Your Clinic Diary sign-in code",
-            mailer_templates_confirmation_content: "<p>Your Clinic Diary sign-in code is</p><h2>{{ .Token }}</h2><p>Type it in the app. It expires in one hour.</p>"
-          }' > /tmp/auth.json
-          curl -sS --fail-with-body -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @/tmp/auth.json > /tmp/authout.json \
-            || { cat /tmp/authout.json; echo "::warning::Could not update login email (token lacks Auth Config permission). Set the Magic Link email template in the dashboard instead."; exit 1; }
-          echo "auth email updated"
-
       - uses: supabase/setup-cli@v1
         if: env.SKIP != '1'
         with:
