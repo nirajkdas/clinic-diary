@@ -49,8 +49,8 @@ jobs:
       - name: Server functions
         if: env.SKIP != '1'
         run: |
-          supabase functions deploy call-webhook --project-ref "$REF" --no-verify-jwt
-          supabase functions deploy push-key --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy call-webhook --project-ref "$REF" --no-verify-jwt --yes
+          supabase functions deploy push-key --project-ref "$REF" --no-verify-jwt --yes
 
       - name: Point the app at this project
         if: env.SKIP != '1'
