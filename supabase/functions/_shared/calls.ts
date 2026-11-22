@@ -19,13 +19,13 @@ const pick = (q: Record<string, string>, ...keys: string[]) => {
   return "";
 };
 
-/** Exotel sends different field names depending on the applet; accept all of them. */
+/** Providers name fields differently (Exotel: CallFrom/DialCallStatus, Edesy: caller/status/duration_sec); accept all. */
 export function readEvent(q: Record<string, string>) {
-  const sid = pick(q, "CallSid", "callsid", "call_sid") || crypto.randomUUID();
-  const from = norm10(pick(q, "CallFrom", "From", "caller", "from_number"));
+  const sid = pick(q, "CallSid", "call_sid", "callsid") || crypto.randomUUID();
+  const from = norm10(pick(q, "CallFrom", "From", "caller", "caller_number", "from_number", "SourceNumber"));
   const event = (pick(q, "event") || "end").toLowerCase();
   const status = pick(q, "DialCallStatus", "Status", "CallStatus", "CallType").toLowerCase();
-  const dur = Number(pick(q, "DialCallDuration", "ConversationDuration", "Duration") || 0) || 0;
+  const dur = Number(pick(q, "DialCallDuration", "ConversationDuration", "duration_sec", "Duration") || 0) || 0;
   const rec = pick(q, "RecordingUrl", "recording_url");
   const missedWords = /no-answer|busy|failed|incomplete|client-hangup|canceled|cancelled|missed/;
   const answered = status === "answered" || (dur > 0 && !missedWords.test(status)) || (status === "completed" && dur > 0);

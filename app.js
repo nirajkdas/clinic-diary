@@ -314,14 +314,14 @@ function vCloud(){
     ${otpEmail?`<form id="otpF"><label for="oCode">Code sent to ${esc(otpEmail)}</label><input id="oCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required><div class="row" style="margin-top:10px"><button class="b pri" type="submit">Sign in</button><button type="button" class="b ghost" data-a="otpback">Use another email</button></div></form>`
     :`<form id="emailF"><label for="oEmail">Email</label><input id="oEmail" type="email" autocomplete="email" required><div class="row" style="margin-top:10px"><button class="b pri" type="submit">Send code</button></div></form>`}
     ${cloudMsg?`<p class="mut">${esc(cloudMsg)}</p>`:''}`;
-  const base=CFG.url+'/functions/v1/exotel?t='+(clinicRow?clinicRow.webhook_token:'');
+  const tok=clinicRow?clinicRow.webhook_token:'',base=CFG.url+'/functions/v1/call-webhook?t='+tok;
   return `<h2>Cloud and clinic line</h2><p style="margin:0">Signed in as <b>${esc(user.email||'')}</b>. ${syncState==='offline'?'<span class="tag hot">Offline, will retry</span>':'<span class="tag">Synced</span>'}</p>
   ${cloudMsg?`<p class="mut">${esc(cloudMsg)}</p>`:''}
   <label>Notifications</label>${pushOn?'<p class="mut" style="margin:0">On for this phone.</p>':`<button class="b pri" data-a="push">Turn on notifications</button>${isIOS&&!standalone?'<p class="mut">Add the app to your Home Screen first, then open it from the icon.</p>':''}`}
   ${clinicRow?`<label for="cTo">Clinic line rings this number</label><div class="row"><input id="cTo" type="tel" inputmode="numeric" value="${esc(clinicRow.connect_to||'')}" placeholder="Your personal number" style="flex:1"><button class="b" data-a="saveto">Save</button></div>
-  <details style="margin-top:12px"><summary class="mut" style="cursor:pointer">Exotel settings (for whoever sets up the line)</summary>
-  <label>Passthru when a call starts</label><div class="row"><code style="flex:1;font-size:13px">${esc(base+'&event=start')}</code><button class="b sm" data-a="copytxt" data-id="${esc(base+'&event=start')}">Copy</button></div>
-  <label>Passthru when a call ends</label><div class="row"><code style="flex:1;font-size:13px">${esc(base+'&event=end')}</code><button class="b sm" data-a="copytxt" data-id="${esc(base+'&event=end')}">Copy</button></div></details>`:''}
+  <details style="margin-top:12px"><summary class="mut" style="cursor:pointer">Call provider settings (for whoever sets up the line)</summary>
+  <p class="mut" style="margin:8px 0 0">Edesy: add a webhook subscription with this URL and secret.</p><label>Webhook URL</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base)}</code><button class="b sm" data-a="copytxt" data-id="${esc(base)}">Copy</button></div><label>Signing secret</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(tok)}</code><button class="b sm" data-a="copytxt" data-id="${esc(tok)}">Copy</button></div>
+  <p class="mut" style="margin:14px 0 0">Exotel: use two Passthru applets.</p><label>When a call starts</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base+'&event=start')}</code><button class="b sm" data-a="copytxt" data-id="${esc(base+'&event=start')}">Copy</button></div><label>When a call ends</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base+'&event=end')}</code><button class="b sm" data-a="copytxt" data-id="${esc(base+'&event=end')}">Copy</button></div></details>`:''}
   <div class="row" style="margin-top:12px"><button class="b ghost" data-a="signout">Sign out</button></div>`;
 }
 function render(){header();$('#view').innerHTML=({today:vToday,calls:vCalls,list:vList,patients:vPatients,settings:vSettings}[tab]||vToday)()}

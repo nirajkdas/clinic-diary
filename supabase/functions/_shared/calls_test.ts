@@ -54,3 +54,14 @@ Deno.test("start then end updates the same call", () => {
   assertEquals(r.call.rec, "https://rec/1.mp3");
   assertEquals(r.call.phone, "9000000102");
 });
+
+Deno.test("Edesy payload: answered and unanswered calls", () => {
+  const ans = { t: "x", event: "end", call_sid: "CA_1", caller: "+919811122233", status: "completed", duration_sec: "154" };
+  const a = applyEvent(null, readEvent(ans), pats, [], ans);
+  assertEquals([a.call.status, a.call.dur, a.call.phone, a.lead], ["answered", 154, "9811122233", null]);
+  const miss = { t: "x", event: "end", call_sid: "CA_2", caller: "+919811122244", status: "no-answer", duration_sec: "0" };
+  const m = applyEvent(null, readEvent(miss), pats, [], miss);
+  assertEquals([m.call.status, m.lead?.phone], ["missed", "9811122244"]);
+  const busy = { t: "x", call_sid: "CA_3", caller: "+919811122255", status: "busy" };
+  assertEquals(applyEvent(null, readEvent(busy), pats, [], busy).call.status, "missed");
+});

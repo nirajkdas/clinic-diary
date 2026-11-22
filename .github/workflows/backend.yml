@@ -64,7 +64,7 @@ jobs:
       - name: Server functions
         if: env.SKIP != '1'
         run: |
-          supabase functions deploy exotel --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy call-webhook --project-ref "$REF" --no-verify-jwt
           supabase functions deploy push-key --project-ref "$REF" --no-verify-jwt
 
       - name: Point the app at this project
