@@ -52,7 +52,7 @@ function seed(){
   const F=(i,due,tr)=>({id:uid(),pid:P[i].id,due,tr,done:false});
   const n=Date.now();
   return {demo:true,at:0,
-    set:{clinic:'Gupta Dental Care & Hospital',addr:'Mangal Bazar, Katihar',addr_hi:'मंगल बाज़ार, कटिहार',doctor:'Dr. Gupta',open:'10:00',close:'19:00',ls:'14:00',le:'16:00',slot:30,off:'0'},
+    set:{clinic:'Gupta Dental Care & Hospital',addr:'Mangal Bazar, Katihar',addr_hi:'मंगल बाज़ार, कटिहार',doctor:'Dr. Saloni Kumari',open:'10:00',close:'19:00',ls:'14:00',le:'16:00',slot:30,off:'0'},
     rules:RULES.map(r=>({n:r[0],hi:r[1],d:r[2]})),tpl:{...TPL},patients:P,
     appts:[A(0,TODAY,'10:00','RCT sitting','done'),A(1,TODAY,'11:00','Checkup'),A(4,TODAY,'12:30','Cap after RCT'),A(5,TODAY,'17:00','Braces adjustment'),A(6,TODAY,'18:00','Scaling / cleaning'),
       A(2,TOM,'10:30','RCT sitting'),A(3,TOM,'11:30','Filling'),A(7,TOM,'17:30','Scaling / cleaning'),A(0,addD(TODAY,7),'10:00','RCT sitting')],
@@ -72,7 +72,8 @@ try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 if(!S)S=seed();
 for(const k of KINDS)if(!Array.isArray(S[k]))S[k]=[];
 if(!S.set.addr){S.set.addr='Mangal Bazar, Katihar';S.set.addr_hi='मंगल बाज़ार, कटिहार'}
-if(S.demo||/^(Smile Dental Clinic|My Dental Clinic)$/.test(S.set.clinic)){S.set.clinic='Gupta Dental Care & Hospital';if(/^Dr\. (Neha)?$/.test(S.set.doctor))S.set.doctor='Dr. Gupta'}
+if(S.demo||/^(Smile Dental Clinic|My Dental Clinic)$/.test(S.set.clinic)){S.set.clinic='Gupta Dental Care & Hospital';}
+if(/^Dr\. (Neha|Gupta)?$/.test((S.set.doctor||'').trim()))S.set.doctor='Dr. Saloni Kumari';
 for(const k of Object.keys(TPL))if(!S.tpl[k]||S.tpl[k]===OLD_TPL[k])S.tpl[k]=TPL[k];
 function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function save(){S.at=Date.now();saveLocal();schedulePush()}
