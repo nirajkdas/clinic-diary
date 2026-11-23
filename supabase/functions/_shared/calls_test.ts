@@ -71,3 +71,10 @@ Deno.test("Edesy call.completed sample (from / duration fields)", () => {
   const r = applyEvent(null, readEvent(q), pats, [], q);
   assertEquals([r.call.status, r.call.dur, r.call.phone], ["answered", 125, "9876543210"]);
 });
+
+Deno.test("a name typed earlier for a number is reused on its next call and lead", () => {
+  const q = { t: "x", call_sid: "CA9", from: "+919811100000", status: "no-answer", duration: "0" };
+  const past = [{ id: "c0", phone: "9811100000", at: 1, status: "answered" as const, dur: 60, outcome: "enquiry", name: "Sanjay Kumar" }];
+  const r = applyEvent(null, readEvent(q), pats, [], q, 5, past);
+  assertEquals([r.call.name, r.lead?.name, r.push.title], ["Sanjay Kumar", "Sanjay Kumar", "Missed call: Sanjay Kumar"]);
+});

@@ -38,15 +38,17 @@ Deno.serve(async (req) => {
   }
 
   const ev = readEvent(q);
-  const [{ data: prevRow }, { data: pats }, { data: lds }] = await Promise.all([
+  const [{ data: prevRow }, { data: pats }, { data: lds }, { data: named }] = await Promise.all([
     sb.from("records").select("data").eq("clinic_id", clinic.id).eq("kind", "calls").eq("id", ev.sid).maybeSingle(),
     sb.from("records").select("data").eq("clinic_id", clinic.id).eq("kind", "patients"),
     sb.from("records").select("data").eq("clinic_id", clinic.id).eq("kind", "leads"),
+    sb.from("records").select("data").eq("clinic_id", clinic.id).eq("kind", "calls").eq("data->>phone", ev.from).not("data->>name", "is", null).limit(5),
   ]);
   const prev = (prevRow?.data as Call) ?? null;
   if (prev && prev.status !== "ringing" && ev.event !== "start") return new Response("duplicate", { status: 200 }); // retried delivery
   const { call, lead, push } = applyEvent(
     prev, ev, (pats ?? []).map((r) => r.data as Patient), (lds ?? []).map((r) => r.data as Lead), q,
+    Date.now(), (named ?? []).map((r) => r.data as Call),
   );
 
   const rows: { clinic_id: string; kind: string; id: string; data: unknown }[] = [{ clinic_id: clinic.id, kind: "calls", id: call.id, data: call }];

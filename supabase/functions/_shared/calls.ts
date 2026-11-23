@@ -9,7 +9,7 @@ export const norm10 = (p: unknown) => {
 
 export type Call = {
   id: string; phone: string; at: number; status: "ringing" | "answered" | "missed";
-  dur: number; outcome: string | null; pid?: string; rec?: string; raw?: Record<string, string>;
+  dur: number; outcome: string | null; pid?: string; name?: string; rec?: string; raw?: Record<string, string>;
 };
 export type Lead = { id: string; phone: string; name: string; src: string; at: number; status: string; tries: number; note: string };
 export type Patient = { id: string; name: string; phone: string };
@@ -34,11 +34,18 @@ export function readEvent(q: Record<string, string>) {
 
 export function applyEvent(
   prev: Call | null, ev: ReturnType<typeof readEvent>, patients: Patient[], leads: Lead[], raw: Record<string, string>, now = Date.now(),
+  pastCalls: Call[] = [],
 ) {
   const call: Call = prev ?? { id: ev.sid, phone: ev.from, at: now, status: "ringing", dur: 0, outcome: null };
   if (!call.phone && ev.from) call.phone = ev.from;
   const pat = patients.find((p) => norm10(p.phone) === call.phone);
   if (pat) call.pid = pat.id;
+  // A name the doctor typed earlier for this number (on a lead or a call) is reused when it isn't a patient yet.
+  const typed = [...leads, ...pastCalls]
+    .filter((x) => x.name && norm10(x.phone) === call.phone)
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))[0]?.name;
+  const known = pat?.name || typed || "";
+  if (known && !pat) call.name = known;
   let lead: Lead | null = null;
   if (ev.event !== "start") {
     call.status = ev.answered ? "answered" : "missed";
@@ -49,11 +56,11 @@ export function applyEvent(
     if (!ev.answered) {
       const open = leads.find((l) => norm10(l.phone) === call.phone && (l.status === "new" || l.status === "callback"));
       if (!open) {
-        lead = { id: "L" + call.id, phone: call.phone, name: pat?.name ?? "", src: "missed", at: now, status: "new", tries: 0, note: pat ? "Existing patient" : "" };
+        lead = { id: "L" + call.id, phone: call.phone, name: known, src: "missed", at: now, status: "new", tries: 0, note: pat ? "Existing patient" : "" };
       }
     }
   }
-  const who = pat?.name ?? (call.phone ? call.phone.slice(0, 5) + " " + call.phone.slice(5) : "Unknown number");
+  const who = known || (call.phone ? call.phone.slice(0, 5) + " " + call.phone.slice(5) : "Unknown number");
   const mins = Math.max(1, Math.round(call.dur / 60));
   const push = ev.event === "start"
     ? { title: "Incoming: " + who, body: pat ? "Existing patient" : "New number", url: "#calls", tag: "call-" + call.id }

@@ -35,6 +35,11 @@ const KINDS=['patients','appts','fus','leads','calls'];
 const LST={new:'New',callback:'Call back',booked:'Booked',lost:'Not interested'};
 const RULES=[['Checkup','चेकअप',180],['Scaling / cleaning','दाँतों की सफ़ाई',180],['Filling','फिलिंग',180],['RCT sitting','RCT सिटिंग',7],['Cap after RCT','RCT के बाद कैप',14],['Extraction','दाँत निकालना',7],['Crown fitting','क्राउन फिटिंग',7],['Braces adjustment','ब्रेसेस एडजस्टमेंट',30],['Pain / emergency','दर्द का इलाज',3]];
 const TPL={
+missed:'नमस्ते! आपने {clinic} ({address_hi}) में कॉल किया था। उस समय डॉक्टर मरीज़ देख रही थीं, इसलिए कॉल नहीं उठ पाया।\nअपॉइंटमेंट के लिए खाली समय:\n{slots_hi}\nजो समय ठीक लगे, इसी नंबर पर अपने नाम के साथ जवाब दें।\n\nHello! You called {clinic}, {address}. The doctor was with a patient, so we could not take your call.\nAvailable slots:\n{slots}\nJust reply here with your name and the time that suits you.\n\n– {doctor}',
+remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} ({address_hi}) में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic}, {address} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
+follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
+noshow:'नमस्ते {name} जी,\nआज {time_hi} बजे आपका अपॉइंटमेंट था, आप नहीं आ पाए। कोई बात नहीं, नया समय चाहिए तो इसी नंबर पर बता दें।\n\nHello {name},\nWe missed you at your {time} appointment today. No problem, reply here if you would like a new time.\n\n– {doctor}'};
+const PREV_TPL={
 missed:'नमस्ते! आपने {clinic} ({address_hi}) में कॉल किया था। उस समय डॉक्टर मरीज़ देख रही थीं, इसलिए कॉल नहीं उठ पाया।\nअपॉइंटमेंट के लिए खाली समय:\n{slots_hi}\nजो समय ठीक लगे, इसी नंबर पर जवाब दें।\n\nHello! You called {clinic}, {address}. The doctor was with a patient, so we could not take your call.\nAvailable slots:\n{slots}\nJust reply here with the time that suits you.\n\n– {doctor}',
 remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} ({address_hi}) में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic}, {address} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
 follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
@@ -74,7 +79,7 @@ for(const k of KINDS)if(!Array.isArray(S[k]))S[k]=[];
 if(!S.set.addr){S.set.addr='Mangal Bazar, Katihar';S.set.addr_hi='मंगल बाज़ार, कटिहार'}
 if(S.demo||/^(Smile Dental Clinic|My Dental Clinic)$/.test(S.set.clinic)){S.set.clinic='Gupta Dental Care & Hospital';}
 if(/^Dr\. (Neha|Gupta)?$/.test((S.set.doctor||'').trim()))S.set.doctor='Dr. Saloni Kumari';
-for(const k of Object.keys(TPL))if(!S.tpl[k]||S.tpl[k]===OLD_TPL[k])S.tpl[k]=TPL[k];
+for(const k of Object.keys(TPL))if(!S.tpl[k]||S.tpl[k]===OLD_TPL[k]||S.tpl[k]===PREV_TPL[k])S.tpl[k]=TPL[k];
 function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function save(){S.at=Date.now();saveLocal();schedulePush()}
 
@@ -168,6 +173,9 @@ async function enablePush(){
 
 let tab='today',vDate=TODAY,lDate=TOM,lf='open',q='',ctx={};
 const pt=id=>S.patients.find(p=>p.id===id)||{name:'?',phone:''};
+function nameFor(phone){const n=norm(phone);const p=S.patients.find(x=>norm(x.phone)===n);if(p&&p.name)return p.name;
+  const named=[...S.leads,...S.calls].filter(x=>x.name&&norm(x.phone)===n).sort((a,b)=>(b.at||0)-(a.at||0))[0];return named?named.name:''}
+const nameBtn=(phone,has)=>`<button class="b sm ghost" data-a="setname" data-id="${esc(phone)}">${has?'Edit name':'+ Add name'}</button>`;
 const rule=n=>S.rules.find(r=>r.n===n);
 const ruleD=n=>{const r=rule(n);return r?+r.d:180};
 const trHi=n=>{const r=rule(n);return r&&r.hi?r.hi:n};
@@ -221,21 +229,21 @@ function vToday(){
 }
 
 function leadCard(l,full){
-  const open=l.status==='new'||l.status==='callback';
-  return `<div class="card ${l.status==='lost'?'done':''}"><div class="hd"><div><div class="big">${show(l.phone)}</div><div class="tr">${l.name?esc(l.name)+' · ':''}${SRC[l.src]} · ${ago(l.at)}${full&&l.tries?` · tried ${l.tries}×`:''}</div></div><span class="tag ${l.status==='new'?'hot':l.status==='booked'?'':'done'}">${LST[l.status]}</span></div>
+  const open=l.status==='new'||l.status==='callback',nm=nameFor(l.phone);
+  return `<div class="card ${l.status==='lost'?'done':''}"><div class="hd"><div><div class="big">${nm?esc(nm):show(l.phone)}</div><div class="tr">${nm?show(l.phone)+' · ':''}${SRC[l.src]} · ${ago(l.at)}${full&&l.tries?` · tried ${l.tries}×`:''}</div></div><span class="tag ${l.status==='new'?'hot':l.status==='booked'?'':'done'}">${LST[l.status]}</span></div>
   ${full&&l.note?`<div class="hist">${esc(l.note)}</div>`:''}
-  ${open?`<div class="acts">${waBtn(l.phone,msgMissed(),'lwa',l.id,'Send free slots')}${callBtn(l.phone,'lcall',l.id)}<button class="b sm pri" data-a="lbook" data-id="${l.id}">Book</button>${full?`<button class="b sm" data-a="lnoans" data-id="${l.id}">No answer</button><button class="b sm ghost" data-a="llost" data-id="${l.id}">Not interested</button>`:''}</div>`:full&&l.status==='lost'?`<div class="acts"><button class="b sm ghost" data-a="lopen" data-id="${l.id}">Reopen</button></div>`:''}</div>`;
+  ${open?`<div class="acts">${waBtn(l.phone,msgMissed(),'lwa',l.id,'Send free slots')}${callBtn(l.phone,'lcall',l.id)}<button class="b sm pri" data-a="lbook" data-id="${l.id}">Book</button>${full?`<button class="b sm" data-a="lnoans" data-id="${l.id}">No answer</button><button class="b sm ghost" data-a="llost" data-id="${l.id}">Not interested</button>${nameBtn(l.phone,!!nm)}`:''}</div>`:full&&l.status==='lost'?`<div class="acts"><button class="b sm ghost" data-a="lopen" data-id="${l.id}">Reopen</button></div>`:''}</div>`;
 }
 function callCard(c,full){
   const p=c.pid?pt(c.pid):S.patients.find(x=>norm(x.phone)===norm(c.phone));
-  const who=p&&p.name&&p.name!=='?'?esc(p.name):show(c.phone);
+  const nm=nameFor(c.phone),who=nm?esc(nm):show(c.phone);
   const mins=Math.max(1,Math.round((c.dur||0)/60));
   const st=c.status==='missed'?'<span class="tag hot">Missed</span>':c.status==='ringing'?'<span class="tag">Ringing</span>':`<span class="tag">${c.manual?'Logged':'Talked '+mins+' min'}</span>`;
   const out=c.outcome?`<span class="tag done">${OUT[c.outcome]}</span>`:'';
   const need=c.status==='answered'&&!c.outcome;
-  return `<div class="card"><div class="hd"><div><div class="nm">${who}</div><div class="tr">${p?show(c.phone)+' · ':''}${ago(c.at)}${c.note?' · '+esc(c.note):''}</div></div><div style="text-align:right">${st}${out}</div></div>
-  ${need?`<div class="mut" style="margin-top:6px">What happened on this call?</div><div class="acts">${outBtns(c.id)}</div>`:''}
-  ${full&&!need?`<div class="acts">${callBtn(c.phone)}${c.rec?`<a class="b sm" href="${esc(c.rec)}" target="_blank" rel="noopener">Recording</a>`:''}${c.outcome?`<button class="b sm ghost" data-a="cundo" data-id="${c.id}">Change label</button>`:''}</div>`:''}</div>`;
+  return `<div class="card"><div class="hd"><div><div class="nm">${who}</div><div class="tr">${nm?show(c.phone)+' · ':''}${ago(c.at)}${c.note?' · '+esc(c.note):''}</div></div><div style="text-align:right">${st}${out}</div></div>
+  ${need?`<div class="mut" style="margin-top:6px">What happened on this call?</div><div class="acts">${outBtns(c.id)}${p?'':nameBtn(c.phone,!!nm)}</div>`:''}
+  ${full&&!need?`<div class="acts">${callBtn(c.phone)}${c.rec?`<a class="b sm" href="${esc(c.rec)}" target="_blank" rel="noopener">Recording</a>`:''}${c.outcome?`<button class="b sm ghost" data-a="cundo" data-id="${c.id}">Change label</button>`:''}${p?'':nameBtn(c.phone,!!nm)}</div>`:''}</div>`;
 }
 const outBtns=id=>`<button class="b sm pri" data-a="cbook" data-id="${id}">Booked</button><button class="b sm" data-a="cback" data-id="${id}">Call back</button><button class="b sm" data-a="cenq" data-id="${id}">Enquiry only</button><button class="b sm ghost" data-a="coth" data-id="${id}">Other</button>`;
 function vCalls(){
@@ -259,7 +267,7 @@ function vCalls(){
 function openCall(id){
   const c=S.calls.find(x=>String(x.id)===String(id));if(!c)return;
   const p=c.pid?pt(c.pid):S.patients.find(x=>norm(x.phone)===norm(c.phone));
-  sheet(`<h3>${p&&p.name&&p.name!=='?'?esc(p.name):show(c.phone)}</h3><div class="mut">${c.status==='answered'?'Talked '+Math.max(1,Math.round((c.dur||0)/60))+' min':'Missed call'} · ${ago(c.at)}</div>
+  sheet(`<h3>${nameFor(c.phone)?esc(nameFor(c.phone)):show(c.phone)}</h3><div class="mut">${c.status==='answered'?'Talked '+Math.max(1,Math.round((c.dur||0)/60))+' min':'Missed call'} · ${ago(c.at)}</div>
   ${c.status==='answered'?`<label for="cNote">Note (optional)</label><input id="cNote" placeholder="e.g. asked RCT price" value="${esc(c.note||'')}"><div class="acts" style="margin-top:12px">${outBtns(c.id)}</div>`:`<div class="acts" style="margin-top:12px">${waBtn(c.phone,msgMissed(),'',c.id,'Send free slots')}${callBtn(c.phone)}</div>`}
   <div class="foot"><button class="b" data-a="close">Close</button></div>`);
 }
@@ -267,6 +275,13 @@ function openLog(){
   sheet(`<h3>Log a call</h3><div class="mut">For a call that did not come through the clinic line.</div><form id="logF"><label for="gPh">Phone number</label><input id="gPh" type="tel" inputmode="numeric" required placeholder="98xxxxxxxx">
   <label for="gNote">Note (optional)</label><input id="gNote" placeholder="e.g. asked RCT price">
   <div class="foot"><button type="button" class="b" data-a="close">Cancel</button><button class="b pri" type="submit">Save, then label it</button></div></form>`);
+}
+function openName(phone){
+  ctx={phone};const nm=nameFor(phone);
+  sheet(`<h3>${nm?'Edit name':'Add name'}</h3><div class="mut">${show(phone)}</div><form id="nameF"><label for="nNm">Name</label><input id="nNm" value="${esc(nm)}" placeholder="e.g. Ramesh Yadav" autocomplete="off" required>
+  <p class="mut" style="margin:8px 0 0">Saved for this number. Future calls from it will show this name.</p>
+  <div class="foot"><button type="button" class="b" data-a="close">Cancel</button><button class="b pri" type="submit">Save</button></div></form>`);
+  setTimeout(()=>{const i=$('#nNm');if(i){i.focus();i.select()}},50);
 }
 function setOutcome(id,out){
   const c=S.calls.find(x=>String(x.id)===String(id));if(!c)return;
@@ -276,7 +291,7 @@ function setOutcome(id,out){
   if(out==='callback'){
     const l=S.leads.find(x=>norm(x.phone)===norm(c.phone)&&(x.status==='new'||x.status==='callback'));
     if(l){l.status='callback';if(c.note)l.note=c.note}
-    else S.leads.push({id:'L'+c.id,phone:c.phone,name:p&&p.name!=='?'?p.name:'',src:'call',at:Date.now(),status:'callback',tries:0,note:c.note||'Talked, call back'});
+    else S.leads.push({id:'L'+c.id,phone:c.phone,name:nameFor(c.phone),src:'call',at:Date.now(),status:'callback',tries:0,note:c.note||'Talked, call back'});
     toast('Added to the call-back list');
   }
   save();close();render();
@@ -344,7 +359,7 @@ function openBook(o){
   ctx=o;let d=o.d;if(!d){d=TODAY;for(let i=0;i<14;i++){if(freeSlots(addD(TODAY,i)).length){d=addD(TODAY,i);break}}}
   const p=o.pid?pt(o.pid):(o.phone?S.patients.find(x=>norm(x.phone)===norm(o.phone)):null);const l=o.lid?S.leads.find(x=>x.id===o.lid):null;
   sheet(`<h3>New appointment</h3><div class="mut">${l?'Booking from a lead':'Pick a free slot'}</div>
-  <form id="bookF"><div class="two"><div><label for="bPh">Phone</label><input id="bPh" type="tel" inputmode="numeric" required value="${esc(p?p.phone:l?l.phone:o.phone||'')}"></div><div><label for="bNm">Name</label><input id="bNm" required value="${esc(p?p.name:l?l.name:'')}"></div></div>
+  <form id="bookF"><div class="two"><div><label for="bPh">Phone</label><input id="bPh" type="tel" inputmode="numeric" required value="${esc(p?p.phone:l?l.phone:o.phone||'')}"></div><div><label for="bNm">Name</label><input id="bNm" required value="${esc(p?p.name:l&&l.name?l.name:o.name||nameFor(o.phone||(l&&l.phone)||''))}"></div></div>
   <div class="mut" id="bOld"></div>
   <div class="two"><div><label for="bD">Date</label><input id="bD" type="date" min="${TODAY}" value="${d}"></div><div><label for="bT">Time</label><select id="bT"></select></div></div>
   <label for="bTr">Treatment</label><select id="bTr">${trOpts(o.tr||'Checkup')}</select>
@@ -387,12 +402,13 @@ document.addEventListener('click',e=>{
   const apt=()=>S.appts.find(x=>x.id===id),ld=()=>S.leads.find(x=>x.id===id),fu=()=>S.fus.find(x=>x.id===id);
   switch(a){
     case 'tab':tab=id;if(id==='today')vDate=TODAY;render();scrollTo(0,0);break;
-    case 'cbook':{const c=S.calls.find(x=>String(x.id)===String(id));const n=$('#cNote');if(n&&n.value.trim())c.note=n.value.trim();openBook({phone:c.phone,pid:c.pid,cid:c.id});break}
+    case 'cbook':{const c=S.calls.find(x=>String(x.id)===String(id));const n=$('#cNote');if(n&&n.value.trim())c.note=n.value.trim();openBook({phone:c.phone,pid:c.pid,cid:c.id,name:nameFor(c.phone)});break}
     case 'cback':setOutcome(id,'callback');break;
     case 'cenq':setOutcome(id,'enquiry');break;
     case 'coth':setOutcome(id,'other');break;
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
+    case 'setname':openName(id);break;
     case 'push':enablePush();break;
     case 'signout':sb.auth.signOut();break;
     case 'saveto':{const v=$('#cTo').value.trim();sb.from('clinics').update({connect_to:v}).eq('id',cid).then(({error})=>{if(error)toast('Could not save');else{clinicRow.connect_to=v;toast('Saved')}});break}
@@ -428,6 +444,10 @@ document.addEventListener('click',e=>{
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
   if(f.id==='addLead'){const ph=$('#lPh').value;if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');const ex=S.patients.find(p=>norm(p.phone)===norm(ph));S.leads.push({id:uid(),phone:ph.trim(),name:ex?ex.name:'',src:$('#lSrc').value,at:Date.now(),status:'new',tries:0,note:ex?'Existing patient':''});lf='open';save();render();toast('Lead added')}
   if(f.id==='bookF')doBook();
+  if(f.id==='nameF'){const v=$('#nNm').value.trim(),n=norm(ctx.phone);if(!v)return;
+    for(const x of [...S.calls,...S.leads])if(norm(x.phone)===n)x.name=v;
+    const p=S.patients.find(x=>norm(x.phone)===n);if(p)p.name=v;
+    save();close();render();toast('Name saved')}
   if(f.id==='logF'){const ph=$('#gPh').value;if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');const c={id:uid(),phone:String(ph).replace(/\D/g,'').slice(-10),at:Date.now(),status:'answered',dur:0,outcome:null,manual:true,note:$('#gNote').value.trim()};S.calls.push(c);save();tab='calls';render();openCall(c.id)}
   if(f.id==='authF'){const mode=(e.submitter&&e.submitter.dataset.mode)||'in',em=$('#aEmail').value.trim(),pw=$('#aPass').value;
     cloudMsg=mode==='up'?'Creating account…':'Signing in…';render();
