@@ -192,6 +192,10 @@ const msgNoshow=a=>fill(S.tpl.noshow,apptVars(a));
 const msgFollow=f=>fill(S.tpl.follow,{...base(),name:pt(f.pid).name,treatment:f.tr,treatment_hi:trHi(f.tr)});
 const msgMissed=()=>{const f=nextFree(3);return fill(S.tpl.missed,{...base(),slots:f.length?f.map(([d,t])=>'• '+(d===TODAY?'Today':d===TOM?'Tomorrow':fmtD(d))+', '+t12(t)).join('\n'):'• Soon',slots_hi:f.length?f.map(([d,t])=>'• '+relHi(d)+', '+tHi(t)).join('\n'):'• जल्द ही'})};
 const waBtn=(ph,txt,act,id,label)=>`<a class="b wa sm" href="${esc(wa(ph,txt))}" target="_blank" rel="noopener" data-a="${act||''}" data-id="${id||''}">${label||'WhatsApp'}</a>`;
+const smsHref=(ph,txt)=>'sms:+'+norm(ph)+'&body='+encodeURIComponent(txt);
+const BY={whatsapp:'WhatsApp',sms:'SMS',call:'call'};
+const remindBtns=a=>{const p=pt(a.pid),t=msgRemind(a);return `<a class="b wa sm" href="${esc(wa(p.phone,t))}" target="_blank" rel="noopener" data-a="rem" data-by="whatsapp" data-id="${a.id}">WhatsApp</a><a class="b sm" href="${esc(smsHref(p.phone,t))}" data-a="rem" data-by="sms" data-id="${a.id}">SMS</a><a class="b sm" href="tel:+${norm(p.phone)}" data-a="rem" data-by="call" data-id="${a.id}">Call</a>`};
+const remTag=a=>a.rem?`<span class="tag">Reminded${a.remBy?' by '+BY[a.remBy]:''}</span>`:'';
 const callBtn=(ph,act,id)=>`<a class="b sm" href="tel:+${norm(ph)}" data-a="${act||''}" data-id="${id||''}">Call</a>`;
 const kalItems=d=>{const r=S.appts.filter(a=>a.date===d&&a.status==='booked');const f=S.fus.filter(f=>!f.done&&f.due<=d);const l=S.leads.filter(l=>l.status==='new'||l.status==='callback');return{r,f,l,left:r.filter(a=>!a.rem).length+f.length+l.length}};
 
@@ -210,6 +214,11 @@ function apptActs(a,big){
   return a.status==='booked'?`<button class="${k} pri" data-a="done" data-id="${a.id}">Came</button><button class="${k} hot" data-a="noshow" data-id="${a.id}">No-show</button>${callBtn(p.phone).replace('b sm',k)}${waBtn(p.phone,msgRemind(a),'rem',a.id,a.rem?'Remind again':'Remind').replace('b wa sm','b wa'+(big?'':' sm'))}`
     :a.status==='noshow'?`${waBtn(p.phone,msgNoshow(a),'',a.id,'Offer new time')}<button class="b sm ghost" data-a="undo" data-id="${a.id}">Undo</button>`
     :`<button class="b sm ghost" data-a="pat" data-id="${a.pid}">View patient</button><button class="b sm ghost" data-a="undo" data-id="${a.id}">Undo</button>`;
+}
+function remindBanner(){
+  if(vDate!==TODAY||nowM()<14*60)return '';
+  const n=S.appts.filter(a=>a.date===TOM&&a.status==='booked'&&!a.rem).length;
+  return n?`<button class="alert remind" data-a="remtom"><span>Tomorrow: ${n} ${n===1?'patient':'patients'} not reminded yet</span><span>Remind ›</span></button>`:'';
 }
 function nextUp(){
   if(vDate!==TODAY)return '';
@@ -239,7 +248,7 @@ function vToday(){
   flush();
   const closed=!list.length,allPast=!closed&&!rows.length;
   return `${demoNote()}${nl&&vDate===TODAY?`<button class="alert" data-a="tab" data-id="calls"><span>${nl} ${nl===1?'call needs':'calls need'} your attention</span><span>View ›</span></button>`:''}
-  ${nextUp()}
+  ${remindBanner()}${nextUp()}
   <div class="datebar"><button class="b sm" data-a="dprev" aria-label="Previous day">‹</button><strong>${relFull(vDate)}</strong><button class="b sm" data-a="dnext" aria-label="Next day">›</button></div>
   ${vDate!==TODAY?`<div class="row" style="justify-content:center;margin-bottom:8px"><button class="b sm ghost" data-a="dtoday">Back to today</button></div>`:''}
   ${closed?`<div class="empty">The clinic is closed on this day. You can change the weekly off day in Settings.</div>`:allPast?`<div class="empty">Day is over. See tomorrow with ›</div>`:`<div class="reg">${rows.join('')}</div>`}`;
@@ -318,8 +327,8 @@ function setOutcome(id,out){
 function vList(){
   const k=kalItems(lDate),sent=k.r.filter(a=>a.rem).length;
   return `${demoNote()}<div class="chips">${[[TODAY,'Today'],[TOM,'Tomorrow']].map(([d,n])=>`<button class="chip ${lDate===d?'on':''}" data-a="ld" data-id="${d}">${n}'s list</button>`).join('')}</div>
-  <h2>1. Reminder messages (${fmtD(lDate)})</h2>
-  ${k.r.length?`<div class="mut">${sent} of ${k.r.length} sent</div><div class="prog"><i style="width:${sent/k.r.length*100}%"></i></div>`+k.r.sort((a,b)=>a.time<b.time?-1:1).map(a=>{const p=pt(a.pid);return `<div class="card ${a.rem?'done':''}"><div class="hd"><div><div class="nm">${esc(p.name)}</div><div class="tr">${t12(a.time)} · ${esc(a.tr)}</div></div>${a.rem?'<span class="tag">Sent</span>':''}</div><div class="acts">${waBtn(p.phone,msgRemind(a),'rem',a.id,a.rem?'Send again':'Send reminder')}${callBtn(p.phone)}</div></div>`}).join(''):`<div class="empty">No appointments on this day.</div>`}
+  <h2>1. Remind patients (${fmtD(lDate)})</h2>
+  ${k.r.length?`<div class="mut">${sent} of ${k.r.length} reminded · send by WhatsApp, SMS or a call</div><div class="prog"><i style="width:${sent/k.r.length*100}%"></i></div>`+k.r.sort((a,b)=>a.time<b.time?-1:1).map(a=>{const p=pt(a.pid);return `<div class="card ${a.rem?'done':''}"><div class="hd"><div><div class="nm" data-a="pat" data-id="${a.pid}">${esc(p.name)}</div><div class="tr">${t12(a.time)} · ${esc(a.tr)} · <span class="ph">${show(p.phone)}</span></div></div>${remTag(a)}</div><div class="acts">${remindBtns(a)}</div></div>`}).join(''):`<div class="empty">No appointments on this day.</div>`}
   <h2>2. Follow-up calls</h2>
   ${k.f.length?k.f.sort((a,b)=>a.due<b.due?-1:1).map(f=>{const p=pt(f.pid);const od=f.due<TODAY;return `<div class="card"><div class="hd"><div><div class="nm" data-a="pat" data-id="${f.pid}">${esc(p.name)}</div><div class="tr">${esc(f.tr)} · <span class="ph">${show(p.phone)}</span></div></div><span class="tag ${od?'hot':''}">${od?'Overdue':rel(f.due)}</span></div><div class="acts">${callBtn(p.phone)}${waBtn(p.phone,msgFollow(f))}<button class="b sm pri" data-a="fbook" data-id="${f.id}">Book</button><button class="b sm" data-a="fsnz" data-id="${f.id}">In 3 days</button><button class="b sm ghost" data-a="fdone" data-id="${f.id}">Done</button></div></div>`}).join(''):`<div class="empty">No follow-ups due.</div>`}
   <h2>3. Leads waiting for a reply</h2>
@@ -388,14 +397,15 @@ function openBook(o){
   <div class="foot"><button type="button" class="b" data-a="close">Cancel</button><button class="b pri" type="submit">Book</button></div></form>`);
   fillTimes(o.t);oldCheck();
 }
-function fillTimes(pre){
-  const d=$('#bD').value,fs=freeSlots(d);if(pre&&!fs.includes(pre))fs.unshift(pre);
-  const days=[];for(let i=0;i<14&&days.length<4;i++){const x=addD(TODAY,i);if(slots(x).length)days.push(x)}
-  if(!days.includes(d))days.push(d);
-  $('#bDays').innerHTML=days.map(x=>`<button type="button" class="chip ${x===d?'on':''}" data-a="bday" data-id="${x}">${x===TODAY?'Today':x===TOM?'Tomorrow':fmtD(x)}</button>`).join('');
-  const sel=pre&&fs.includes(pre)?pre:fs[0]||'';$('#bT').value=sel;
-  $('#bTimes').innerHTML=fs.length?fs.map(t=>`<button type="button" class="chip ${t===sel?'on':''}" data-a="btime" data-id="${t}">${t12(t)}</button>`).join(''):'<div class="mut">No free time on this day. Pick another day.</div>';
+function fillTimes(pre,px='b'){
+  const d=$('#'+px+'D').value,fs=freeSlots(d);if(pre&&!fs.includes(pre))fs.unshift(pre);
+  const days=[];if(px==='d')days.push(d);for(let i=0;i<14&&days.length<4;i++){const x=px==='d'?addD(d,i+1):addD(TODAY,i);if(slots(x).length&&!days.includes(x))days.push(x)}
+  if(!days.includes(d))days.unshift(d);
+  $('#'+px+'Days').innerHTML=days.sort().map(x=>`<button type="button" class="chip ${x===d?'on':''}" data-a="bday" data-p="${px}" data-id="${x}">${x===TODAY?'Today':x===TOM?'Tomorrow':fmtD(x)}</button>`).join('');
+  const sel=pre&&fs.includes(pre)?pre:fs[0]||'';$('#'+px+'T').value=sel;
+  $('#'+px+'Times').innerHTML=fs.length?fs.map(t=>`<button type="button" class="chip ${t===sel?'on':''}" data-a="btime" data-p="${px}" data-id="${t}">${t12(t)}</button>`).join(''):'<div class="mut">No free time on this day. Pick another day.</div>';
 }
+
 function oldCheck(){const ph=norm($('#bPh').value);const p=ph.length>=12&&S.patients.find(x=>norm(x.phone)===ph);$('#bOld').textContent=p?'Existing patient: '+p.name:'';if(p&&!$('#bNm').value)$('#bNm').value=p.name}
 function doBook(){
   const ph=$('#bPh').value.trim(),nm=$('#bNm').value.trim(),d=$('#bD').value,t=$('#bT').value,tr=$('#bTr').value;
@@ -410,16 +420,25 @@ function doBook(){
   sheet(`<h3>Booked</h3><p>${esc(p.name)} · ${relFull(d)} · ${t12(t)}</p><p class="mut">Send the patient a confirmation in one tap.</p><div class="foot"><button class="b" data-a="close">Close</button>${waBtn(p.phone,msgRemind(a),'remc',a.id,'Send confirmation').replace('b wa sm','b wa')}</div>`);
 }
 function openDone(a){
-  ctx={aid:a.id};const p=pt(a.pid);
-  sheet(`<h3>${esc(p.name)} came</h3><div class="mut">${t12(a.time)}</div><form id="doneF"><label for="dTr">Treatment done today</label><select id="dTr">${trOpts(a.tr)}</select>
-  <label for="dNx">Next follow-up</label><input id="dNx" type="date" min="${TODAY}" value="${addD(TODAY,ruleD(a.tr))}">
-  <label style="display:flex;gap:10px;align-items:center;font-weight:400"><input id="dNo" type="checkbox" style="width:22px;min-height:22px"> No follow-up needed</label>
+  const p=pt(a.pid),days=ruleD(a.tr);
+  ctx={aid:a.id,mode:days<=45?'book':'call'};
+  let nd=addD(TODAY,days);for(let i=0;i<7&&!slots(nd).length;i++)nd=addD(nd,1);
+  sheet(`<h3>${esc(p.name)} came</h3><div class="mut">${t12(a.time)} · ${show(p.phone)}</div><form id="doneF">
+  <label for="dTr">Treatment done today</label><select id="dTr">${trOpts(a.tr)}</select>
+  <label>Next visit</label><div class="chips" id="dModes" style="margin:0">${[['book','Book appointment'],['call','Remind me to call'],['none','Not needed']].map(([k,n])=>`<button type="button" class="chip ${ctx.mode===k?'on':''}" data-a="dmode" data-id="${k}">${n}</button>`).join('')}</div>
+  <div id="dm-book" ${ctx.mode==='book'?'':'hidden'}><label>Day</label><div class="pick" id="dDays"></div>
+    <div class="row" style="margin-top:6px"><label for="dD" class="mut" style="margin:0;font-weight:400">Other date</label><input id="dD" type="date" min="${TODAY}" value="${nd}" style="flex:1;min-height:40px"></div>
+    <label>Time</label><div class="pick times" id="dTimes"></div><input type="hidden" id="dT">
+    <p class="mut" style="margin:8px 0 0">The day before, this patient shows up in To-do to remind by WhatsApp, SMS or call.</p></div>
+  <div id="dm-call" ${ctx.mode==='call'?'':'hidden'}><label for="dNx">Call them on</label><input id="dNx" type="date" min="${TODAY}" value="${addD(TODAY,days)}"></div>
   <div class="foot"><button type="button" class="b" data-a="close">Cancel</button><button class="b pri" type="submit">Save</button></div></form>`);
+  fillTimes(null,'d');
 }
 function openPat(id){
   const p=pt(id);const A=S.appts.filter(a=>a.pid===id).sort((a,b)=>(b.date+b.time)<(a.date+a.time)?-1:1);const F=S.fus.filter(f=>f.pid===id&&!f.done);
   const st={booked:'Scheduled',done:'Came',noshow:'No-show',cancel:'Cancelled'};
   sheet(`<h3>${esc(p.name)}</h3><div class="ph">${show(p.phone)}</div><div class="acts">${callBtn(p.phone)}<a class="b wa sm" href="${esc('https://wa.me/'+norm(p.phone))}" target="_blank" rel="noopener">WhatsApp</a><button class="b sm pri" data-a="pbook" data-id="${id}">New appointment</button></div>
+  ${(()=>{const nx=S.appts.filter(a=>a.pid===id&&a.status==='booked'&&a.date>=TODAY).sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1)[0];return nx?`<h2>Next appointment</h2><div class="card next"><div class="nm">${relFull(nx.date)} · ${t12(nx.time)}</div><div class="tr">${esc(nx.tr)} ${remTag(nx)}</div><div class="acts">${remindBtns(nx)}</div></div>`:''})()}
   ${F.length?`<h2>Pending follow-ups</h2>`+F.map(f=>`<div class="hist">${rel(f.due)} · ${esc(f.tr)}</div>`).join(''):''}
   <h2>History</h2>${A.length?A.map(a=>`<div class="hist">${relFull(a.date)}, ${t12(a.time)} · ${esc(a.tr)} · <b>${st[a.status]}</b></div>`).join(''):'<div class="mut">Nothing yet.</div>'}
   <div class="foot"><button class="b" data-a="close">Close</button></div>`);
@@ -438,8 +457,10 @@ document.addEventListener('click',e=>{
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
     case 'setname':openName(id);break;
-    case 'bday':$('#bD').value=id;fillTimes();break;
-    case 'btime':$('#bT').value=id;for(const c of document.querySelectorAll('#bTimes .chip'))c.classList.toggle('on',c.dataset.id===id);break;
+    case 'remtom':tab='list';lDate=TOM;render();scrollTo(0,0);break;
+    case 'dmode':ctx.mode=id;for(const c of document.querySelectorAll('#dModes .chip'))c.classList.toggle('on',c.dataset.id===id);for(const x of ['book','call'])$('#dm-'+x).hidden=x!==id;break;
+    case 'bday':{const px=el.dataset.p||'b';$('#'+px+'D').value=id;fillTimes(null,px);break}
+    case 'btime':{const px=el.dataset.p||'b';$('#'+px+'T').value=id;for(const c of document.querySelectorAll('#'+px+'Times .chip'))c.classList.toggle('on',c.dataset.id===id);break}
     case 'push':enablePush();break;
     case 'signout':sb.auth.signOut();break;
     case 'saveto':{const v=$('#cTo').value.trim();sb.from('clinics').update({connect_to:v}).eq('id',cid).then(({error})=>{if(error)toast('Could not save');else{clinicRow.connect_to=v;toast('Saved')}});break}
@@ -451,7 +472,7 @@ document.addEventListener('click',e=>{
     case 'done':openDone(apt());break;
     case 'noshow':{const x=apt();x.status='noshow';S.fus.push({id:uid(),pid:x.pid,due:TODAY,tr:x.tr,done:false});save();render();toast('Added to today\'s call list');break}
     case 'undo':{const x=apt();x.status='booked';save();render();break}
-    case 'rem':case 'remc':{const x=apt();if(x){x.rem=true;save();setTimeout(render,300)}if(a==='remc')close();break}
+    case 'rem':case 'remc':{const x=apt();if(x){x.rem=true;if(el.dataset.by)x.remBy=el.dataset.by;save();setTimeout(render,300)}if(a==='remc')close();break}
     case 'lf':lf=id;render();break;
     case 'ld':lDate=id;render();break;
     case 'lwa':case 'lcall':{const l=ld();if(l&&l.status==='new'){l.status='callback';l.tries=(l.tries||0)+1;save();setTimeout(render,300)}break}
@@ -492,10 +513,16 @@ document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
       else if(!data.session)cloudMsg='Account created. Please sign in.';
       else cloudMsg='';
       render()})}
-  if(f.id==='doneF'){const x=S.appts.find(a=>a.id===ctx.aid);const no=$('#dNo').checked,nx=$('#dNx').value;x.status='done';x.tr=$('#dTr').value;if(!no)S.fus.push({id:uid(),pid:x.pid,due:nx,tr:x.tr,done:false});save();close();render();toast(no?'Saved':'Follow-up set: '+rel(nx))}
+  if(f.id==='doneF'){const x=S.appts.find(a=>a.id===ctx.aid);x.status='done';x.tr=$('#dTr').value;const m=ctx.mode;
+    if(m==='book'){const d=$('#dD').value,t=$('#dT').value;if(!t)return toast('No free time that day, pick another day');
+      const n={id:uid(),pid:x.pid,date:d,time:t,tr:x.tr,status:'booked'};S.appts.push(n);save();render();
+      const p=pt(x.pid);sheet(`<h3>Next visit booked</h3><p>${esc(p.name)} · ${relFull(d)} · ${t12(t)}</p><p class="mut">A reminder will be due the day before. Send the date now too?</p><div class="foot"><button class="b" data-a="close">Close</button>${waBtn(p.phone,msgRemind(n),'',n.id,'Send on WhatsApp').replace('b wa sm','b wa')}</div>`);return}
+    if(m==='call')S.fus.push({id:uid(),pid:x.pid,due:$('#dNx').value,tr:x.tr,done:false});
+    save();close();render();toast(m==='call'?'Call reminder set: '+rel($('#dNx').value):'Saved')}
 });
 document.addEventListener('change',e=>{const t=e.target;
   if(t.id==='bD')fillTimes();
+  if(t.id==='dD')fillTimes(null,'d');
   if(t.id==='dTr')$('#dNx').value=addD(TODAY,ruleD(t.value));
   if(t.dataset.set){S.set[t.dataset.set]=t.value;save();header()}
   if(t.dataset.rule){const r=S.rules[+t.dataset.rule];r[t.dataset.k]=t.dataset.k==='d'?Math.max(0,+t.value||0):t.value;save()}
