@@ -5,3 +5,7 @@ verify_jwt = false
 
 [functions.push-key]
 verify_jwt = false
+
+# Called by pg_cron with its own token (checked in the function).
+[functions.daily-digest]
+verify_jwt = false

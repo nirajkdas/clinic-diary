@@ -76,6 +76,7 @@ let S=null;
 try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 if(!S)S=seed();
 for(const k of KINDS)if(!Array.isArray(S[k]))S[k]=[];
+if(!S.set.remindAt)S.set.remindAt='18:00';
 if(!S.set.addr){S.set.addr='Mangal Bazar, Katihar';S.set.addr_hi='मंगल बाज़ार, कटिहार'}
 if(S.demo||/^(Smile Dental Clinic|My Dental Clinic)$/.test(S.set.clinic)){S.set.clinic='Gupta Dental Care & Hospital';}
 if(/^Dr\. (Neha|Gupta)?$/.test((S.set.doctor||'').trim()))S.set.doctor='Dr. Saloni Kumari';
@@ -345,7 +346,7 @@ function vPatients(){
 
 function vSettings(){
   const s=S.set,F=(k,l,t='text')=>`<div><label for="s_${k}">${l}</label><input id="s_${k}" type="${t}" data-set="${k}" value="${esc(s[k])}"></div>`;
-  return `<h2>Clinic</h2><div class="two">${F('clinic','Clinic name')}${F('doctor','Doctor name')}${F('addr','Address (English)')}${F('addr_hi','Address (Hindi)')}${F('open','Opens at','time')}${F('close','Closes at','time')}${F('ls','Break starts','time')}${F('le','Break ends','time')}
+  return `<h2>Clinic</h2><div class="two">${F('clinic','Clinic name')}${F('doctor','Doctor name')}${F('addr','Address (English)')}${F('addr_hi','Address (Hindi)')}${F('open','Opens at','time')}${F('close','Closes at','time')}${F('ls','Break starts','time')}${F('le','Break ends','time')}${F('remindAt','Evening to-do notification','time')}
   <div><label for="s_slot">Slot length (minutes)</label><select id="s_slot" data-set="slot">${[15,20,30,45,60].map(n=>`<option ${+s.slot===n?'selected':''}>${n}</option>`).join('')}</select></div>
   <div><label for="s_off">Weekly off</label><select id="s_off" data-set="off"><option value="-1">None</option>${DAYF.map((d,i)=>`<option value="${i}" ${String(s.off)===String(i)?'selected':''}>${d}</option>`).join('')}</select></div></div>
   <h2>Treatments and follow-ups</h2><p class="mut" style="margin:0 0 8px">When you tap "Came", the next follow-up is created this many days later. These are starting guesses, so change them to match your practice. The Hindi name is used in patient messages.</p>

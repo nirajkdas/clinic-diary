@@ -34,7 +34,8 @@ jobs:
         if: env.SKIP != '1'
         run: |
           for f in supabase/migrations/*.sql; do
-            jq -n --rawfile q "$f" '{query:$q}' > /tmp/body.json
+            sed "s#__PROJECT_URL__#https://$REF.supabase.co#g" "$f" > /tmp/m.sql
+            jq -n --rawfile q /tmp/m.sql '{query:$q}' > /tmp/body.json
             curl -sS --fail-with-body -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
               -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @/tmp/body.json > /tmp/out.json \
               || { cat /tmp/out.json; exit 1; }
@@ -51,6 +52,7 @@ jobs:
         run: |
           supabase functions deploy call-webhook --project-ref "$REF" --no-verify-jwt --yes
           supabase functions deploy push-key --project-ref "$REF" --no-verify-jwt --yes
+          supabase functions deploy daily-digest --project-ref "$REF" --no-verify-jwt --yes
 
       - name: Point the app at this project
         if: env.SKIP != '1'
