@@ -171,7 +171,7 @@ async function enablePush(){
   }catch(e){toast('Could not turn on notifications: '+(e.message||e))}
 }
 
-let tab='today',vDate=TODAY,lDate=TOM,lf='open',q='',ctx={};
+let tab='today',vDate=TODAY,lDate=TOM,lf='booked',q='',ctx={};
 const pt=id=>S.patients.find(p=>p.id===id)||{name:'?',phone:''};
 function nameFor(phone){const n=norm(phone);const p=S.patients.find(x=>norm(x.phone)===n);if(p&&p.name)return p.name;
   const named=[...S.leads,...S.calls].filter(x=>x.name&&norm(x.phone)===n).sort((a,b)=>(b.at||0)-(a.at||0))[0];return named?named.name:''}
@@ -197,35 +197,52 @@ const kalItems=d=>{const r=S.appts.filter(a=>a.date===d&&a.status==='booked');co
 
 function header(){
   $('#clinicName').textContent=S.set.clinic||'Clinic Diary';$('#today').textContent=fmtD(TODAY);
-  const nl=S.leads.filter(l=>l.status==='new').length+unlabelled().length,ta=S.appts.filter(a=>a.date===TODAY&&a.status==='booked').length,k=kalItems(TOM).left;
+  const nl=S.leads.filter(l=>l.status==='new'||l.status==='callback').length+unlabelled().length,ta=S.appts.filter(a=>a.date===TODAY&&a.status==='booked').length,k=kalItems(TOM).left;
   $('#counts').innerHTML=`<button class="cnt ${nl?'hot':''}" data-a="tab" data-id="calls"><b>${nl}</b><span>Calls to handle</span></button><button class="cnt" data-a="tab" data-id="today"><b>${ta}</b><span>Patients left today</span></button><button class="cnt" data-a="tab" data-id="list"><b>${k}</b><span>Tasks for tomorrow</span></button>`;
-  const T=[['today','Today',0],['calls','Calls',nl],['list','To-do',k],['patients','Patients',0],['settings','Settings',0]];
+  const T=[['today','Today',0],['calls','Calls',nl],['list','To-do',k],['patients','Patients',0]];
   $('#tabs').innerHTML=T.map(([k2,n,c])=>`<button class="${tab===k2?'on':''}" data-a="tab" data-id="${k2}">${n}${c?`<sup>${c}</sup>`:''}</button>`).join('');
 }
 const unlabelled=()=>S.calls.filter(c=>c.status==='answered'&&!c.outcome).sort((a,b)=>b.at-a.at);
 const demoNote=()=>S.demo?`<div class="demo">This is sample data so you can see how the app works. To start with your own, tap "Clear everything" in Settings.</div>`:'';
 
+function apptActs(a,big){
+  const p=pt(a.pid),k=big?'b':'b sm';
+  return a.status==='booked'?`<button class="${k} pri" data-a="done" data-id="${a.id}">Came</button><button class="${k} hot" data-a="noshow" data-id="${a.id}">No-show</button>${callBtn(p.phone).replace('b sm',k)}${waBtn(p.phone,msgRemind(a),'rem',a.id,a.rem?'Remind again':'Remind').replace('b wa sm','b wa'+(big?'':' sm'))}`
+    :a.status==='noshow'?`${waBtn(p.phone,msgNoshow(a),'',a.id,'Offer new time')}<button class="b sm ghost" data-a="undo" data-id="${a.id}">Undo</button>`
+    :`<button class="b sm ghost" data-a="pat" data-id="${a.pid}">View patient</button><button class="b sm ghost" data-a="undo" data-id="${a.id}">Undo</button>`;
+}
+function nextUp(){
+  if(vDate!==TODAY)return '';
+  const now=nowM(),slot=+S.set.slot||30;
+  const a=S.appts.filter(x=>x.date===TODAY&&x.status==='booked'&&tm(x.time)+slot>=now).sort((x,y)=>x.time<y.time?-1:1)[0];
+  if(!a)return '';
+  const p=pt(a.pid),d=tm(a.time)-now;
+  const when=d<=0?'Now':d<60?'In '+d+' min':'At '+t12(a.time);
+  return `<div class="card next"><div class="mut">Next patient · <b>${when}</b></div><div class="nm" style="font-size:24px;margin-top:2px" data-a="pat" data-id="${a.pid}">${esc(p.name)}</div>
+  <div class="tr">${t12(a.time)} · ${esc(a.tr)} · <span class="ph">${show(p.phone)}</span></div><div class="acts">${apptActs(a,true)}</div></div>`;
+}
 function vToday(){
-  const nl=S.leads.filter(l=>l.status==='new').length+unlabelled().length,sl=slots(vDate);
+  const nl=S.leads.filter(l=>l.status==='new'||l.status==='callback').length+unlabelled().length,sl=slots(vDate),slot=+S.set.slot||30;
   const list=[...new Set([...sl,...S.appts.filter(a=>a.date===vDate&&a.status!=='cancel').map(a=>a.time)])].sort();
-  let brk=false;const rows=[];
+  const isPast=t=>vDate<TODAY||(vDate===TODAY&&tm(t)+slot<nowM());
+  const rows=[];let brk=false,free=[];
+  const flush=()=>{if(!free.length)return;const f=free[0],l=free[free.length-1];
+    rows.push(`<div class="slot freeband"><div class="t"><b>${hm(f)}</b><i>${ap(f)}</i></div><div class="c"><div class="free"><span>Free${free.length>1?` until ${t12(mt(tm(l)+slot))}`:''}</span><button class="b sm" data-a="book" data-d="${vDate}" data-t="${f}">+ Book</button></div></div></div>`);free=[]};
   for(const t of list){
-    if(S.set.ls&&S.set.le&&!brk&&sl.length&&tm(t)>=tm(S.set.le)&&tm(S.set.ls)<tm(S.set.le)){brk=true;rows.push(`<div class="slot brk"><div class="t"><b>${hm(S.set.ls)}</b><i>${ap(S.set.ls)}</i></div><div class="c">Break until ${t12(S.set.le)}</div></div>`)}
-    const a=busy(vDate,t),past=vDate<TODAY||(vDate===TODAY&&tm(t)+ +S.set.slot<nowM());
-    let c;
-    if(a){const p=pt(a.pid);const st=a.status==='done'?'<span class="tag done">Came</span>':a.status==='noshow'?'<span class="tag hot">No-show</span>':a.rem?'<span class="tag">Reminder sent</span>':'';
-      const acts=a.status==='booked'?`<button class="b sm pri" data-a="done" data-id="${a.id}">Came</button><button class="b sm hot" data-a="noshow" data-id="${a.id}">No-show</button>${callBtn(p.phone)}${waBtn(p.phone,msgRemind(a),'rem',a.id,'Reminder')}`
-        :a.status==='noshow'?`${waBtn(p.phone,msgNoshow(a),'',a.id,'Offer new time')}<button class="b sm ghost" data-a="undo" data-id="${a.id}">Undo</button>`
-        :`<button class="b sm ghost" data-a="pat" data-id="${a.pid}">View patient</button><button class="b sm ghost" data-a="undo" data-id="${a.id}">Undo</button>`;
-      c=`<div class="nm" data-a="pat" data-id="${a.pid}">${esc(p.name)}${st}</div><div class="tr">${esc(a.tr)} · <span class="ph">${show(p.phone)}</span></div><div class="acts">${acts}</div>`}
-    else c=`<div class="free"><span>Free</span>${past?'':`<button class="b sm" data-a="book" data-d="${vDate}" data-t="${t}">+ Book</button>`}</div>`;
-    rows.push(`<div class="slot ${past?'past':''}"><div class="t"><b>${hm(t)}</b><i>${ap(t)}</i></div><div class="c">${c}</div></div>`);
+    if(S.set.ls&&S.set.le&&!brk&&sl.length&&tm(t)>=tm(S.set.le)&&tm(S.set.ls)<tm(S.set.le)){flush();brk=true;rows.push(`<div class="slot brk"><div class="t"><b>${hm(S.set.ls)}</b><i>${ap(S.set.ls)}</i></div><div class="c">Break until ${t12(S.set.le)}</div></div>`)}
+    const a=busy(vDate,t),past=isPast(t);
+    if(!a){if(!past)free.push(t);continue}
+    flush();
+    const p=pt(a.pid);const st=a.status==='done'?'<span class="tag done">Came</span>':a.status==='noshow'?'<span class="tag hot">No-show</span>':a.rem?'<span class="tag">Reminder sent</span>':'';
+    rows.push(`<div class="slot ${past?'past':''}"><div class="t"><b>${hm(t)}</b><i>${ap(t)}</i></div><div class="c"><div class="nm" data-a="pat" data-id="${a.pid}">${esc(p.name)}${st}</div><div class="tr">${esc(a.tr)} · <span class="ph">${show(p.phone)}</span></div><div class="acts">${apptActs(a,false)}</div></div></div>`);
   }
+  flush();
+  const closed=!list.length,allPast=!closed&&!rows.length;
   return `${demoNote()}${nl&&vDate===TODAY?`<button class="alert" data-a="tab" data-id="calls"><span>${nl} ${nl===1?'call needs':'calls need'} your attention</span><span>View ›</span></button>`:''}
+  ${nextUp()}
   <div class="datebar"><button class="b sm" data-a="dprev" aria-label="Previous day">‹</button><strong>${relFull(vDate)}</strong><button class="b sm" data-a="dnext" aria-label="Next day">›</button></div>
   ${vDate!==TODAY?`<div class="row" style="justify-content:center;margin-bottom:8px"><button class="b sm ghost" data-a="dtoday">Back to today</button></div>`:''}
-  ${list.length?`<div class="reg">${rows.join('')}</div>`:`<div class="empty">The clinic is closed on this day. You can change the weekly off day in Settings.</div>`}
-  <div class="row" style="margin-top:14px"><button class="b pri" data-a="book" data-d="${vDate}">+ New appointment</button></div>`;
+  ${closed?`<div class="empty">The clinic is closed on this day. You can change the weekly off day in Settings.</div>`:allPast?`<div class="empty">Day is over. See tomorrow with ›</div>`:`<div class="reg">${rows.join('')}</div>`}`;
 }
 
 function leadCard(l,full){
@@ -247,22 +264,20 @@ function callCard(c,full){
 }
 const outBtns=id=>`<button class="b sm pri" data-a="cbook" data-id="${id}">Booked</button><button class="b sm" data-a="cback" data-id="${id}">Call back</button><button class="b sm" data-a="cenq" data-id="${id}">Enquiry only</button><button class="b sm ghost" data-a="coth" data-id="${id}">Other</button>`;
 function vCalls(){
-  const U=unlabelled();
-  const L=S.leads.filter(l=>lf==='all'||(lf==='open'?l.status==='new'||l.status==='callback':l.status===lf)).sort((a,b)=>b.at-a.at);
-  const C=[['open','Needs reply'],['booked','Booked'],['lost','Not interested'],['all','All']];
+  const U=unlabelled().map(c=>({at:c.at,h:callCard(c,false)}));
+  const L=S.leads.filter(l=>l.status==='new'||l.status==='callback').map(l=>({at:l.at,h:leadCard(l,true)}));
+  const todo=[...U,...L].sort((a,b)=>b.at-a.at);
+  const done=S.leads.filter(l=>lf==='all'||l.status===lf).filter(l=>lf==='all'||l.status!=='new'&&l.status!=='callback').sort((a,b)=>b.at-a.at);
+  const C=[['booked','Booked'],['lost','Not interested'],['all','All leads']];
   const log=[...S.calls].sort((a,b)=>b.at-a.at).filter(c=>!(c.status==='answered'&&!c.outcome)).slice(0,25);
   const live=!!cid;
-  return `${demoNote()}<div class="datebar"><h2 style="margin:0">Calls</h2><button class="b sm" data-a="logcall">+ Log a call</button></div>
-  <p class="mut" style="margin:0 0 10px">${live?'Clinic line connected: calls appear here by themselves.':cloudReady()?'Sign in under Settings to receive calls automatically.':'Calls will appear here by themselves once the clinic line is set up. Until then, log them with the button.'}</p>
-  <h2>Label these calls (${U.length})</h2>
-  ${U.length?U.map(c=>callCard(c,false)).join(''):`<div class="empty">Every call has a label. Nothing slipped through.</div>`}
-  <h2>Leads</h2>
-  <form id="addLead" class="addl"><div><label for="lPh">Phone number</label><input id="lPh" type="tel" inputmode="numeric" placeholder="98xxxxxxxx" required></div>
-  <div><label for="lSrc">Source</label><select id="lSrc">${Object.entries(SRC).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div><button class="b pri" type="submit">Add</button></form>
-  <div class="chips" style="margin-top:14px">${C.map(([k,n])=>`<button class="chip ${lf===k?'on':''}" data-a="lf" data-id="${k}">${n}</button>`).join('')}</div>
-  ${L.length?L.map(l=>leadCard(l,true)).join(''):`<div class="empty">${lf==='open'?'All caught up. No leads waiting for a reply.':'Nothing here yet.'}</div>`}
-  <h2>Call log</h2>
-  ${log.length?log.map(c=>callCard(c,true)).join(''):`<div class="empty">No calls yet.</div>`}`;
+  return `${demoNote()}<h2 style="margin-top:4px">Needs your attention (${todo.length})</h2>
+  <p class="mut" style="margin:0 0 10px">${live?'Clinic line connected: calls appear here by themselves.':'Add calls here with the + button until the clinic line is connected.'}</p>
+  ${todo.length?todo.map(x=>x.h).join(''):`<div class="empty">All done. Every call has been handled.</div>`}
+  <details class="hist-box"${lf!=='booked'?' open':''}><summary><h2 style="display:inline">History</h2></summary>
+  <div class="chips">${C.map(([k,n])=>`<button class="chip ${lf===k?'on':''}" data-a="lf" data-id="${k}">${n}</button>`).join('')}</div>
+  ${done.length?done.map(l=>leadCard(l,true)).join(''):`<div class="empty">Nothing here yet.</div>`}
+  <h2>Recent calls</h2>${log.length?log.map(c=>callCard(c,true)).join(''):`<div class="empty">No calls yet.</div>`}</details>`;
 }
 function openCall(id){
   const c=S.calls.find(x=>String(x.id)===String(id));if(!c)return;
@@ -272,9 +287,12 @@ function openCall(id){
   <div class="foot"><button class="b" data-a="close">Close</button></div>`);
 }
 function openLog(){
-  sheet(`<h3>Log a call</h3><div class="mut">For a call that did not come through the clinic line.</div><form id="logF"><label for="gPh">Phone number</label><input id="gPh" type="tel" inputmode="numeric" required placeholder="98xxxxxxxx">
-  <label for="gNote">Note (optional)</label><input id="gNote" placeholder="e.g. asked RCT price">
-  <div class="foot"><button type="button" class="b" data-a="close">Cancel</button><button class="b pri" type="submit">Save, then label it</button></div></form>`);
+  sheet(`<h3>Add a call or message</h3><form id="logF"><label for="gPh">Phone number</label><input id="gPh" type="tel" inputmode="numeric" required placeholder="98xxxxxxxx">
+  <label for="gNm">Name (optional)</label><input id="gNm" autocomplete="off" placeholder="e.g. Sanjay Kumar">
+  <label>What happened?</label>
+  <div class="pick"><button class="b" type="submit" data-k="missed">Missed call</button><button class="b" type="submit" data-k="talked">Talked on phone</button><button class="b" type="submit" data-k="whatsapp">WhatsApp message</button></div>
+  <div class="foot"><button type="button" class="b" data-a="close">Cancel</button></div></form>`);
+  setTimeout(()=>{const i=$('#gPh');if(i)i.focus()},50);
 }
 function openName(phone){
   ctx={phone};const nm=nameFor(phone);
@@ -349,7 +367,9 @@ function vCloud(){
   <p class="mut" style="margin:14px 0 0">Exotel: use two Passthru applets.</p><label>When a call starts</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base+'&event=start')}</code><button class="b sm" data-a="copytxt" data-id="${esc(base+'&event=start')}">Copy</button></div><label>When a call ends</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base+'&event=end')}</code><button class="b sm" data-a="copytxt" data-id="${esc(base+'&event=end')}">Copy</button></div></details>`:''}
   <div class="row" style="margin-top:12px"><button class="b ghost" data-a="signout">Sign out</button></div>`;
 }
-function render(){header();$('#view').innerHTML=({today:vToday,calls:vCalls,list:vList,patients:vPatients,settings:vSettings}[tab]||vToday)()}
+function fab(){const f={today:['book','+ Book'],patients:['book','+ Book'],calls:['logcall','+ Add']}[tab];
+  return f?`<button class="fab" data-a="${f[0]}" ${f[0]==='book'?`data-d="${tab==='today'?vDate:''}"`:''}>${f[1]}</button>`:''}
+function render(){header();$('#view').innerHTML=({today:vToday,calls:vCalls,list:vList,patients:vPatients,settings:vSettings}[tab]||vToday)()+fab()}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2200)}
 function sheet(h){$('#pane').innerHTML=h;$('#sheet').classList.add('on')}
 function close(){$('#sheet').classList.remove('on')}
@@ -361,12 +381,21 @@ function openBook(o){
   sheet(`<h3>New appointment</h3><div class="mut">${l?'Booking from a lead':'Pick a free slot'}</div>
   <form id="bookF"><div class="two"><div><label for="bPh">Phone</label><input id="bPh" type="tel" inputmode="numeric" required value="${esc(p?p.phone:l?l.phone:o.phone||'')}"></div><div><label for="bNm">Name</label><input id="bNm" required value="${esc(p?p.name:l&&l.name?l.name:o.name||nameFor(o.phone||(l&&l.phone)||''))}"></div></div>
   <div class="mut" id="bOld"></div>
-  <div class="two"><div><label for="bD">Date</label><input id="bD" type="date" min="${TODAY}" value="${d}"></div><div><label for="bT">Time</label><select id="bT"></select></div></div>
+  <label>Day</label><div class="pick" id="bDays"></div>
+  <div class="row" style="margin-top:6px"><label for="bD" class="mut" style="margin:0;font-weight:400">Other date</label><input id="bD" type="date" min="${TODAY}" value="${d}" style="flex:1;min-height:40px"></div>
+  <label>Time</label><div class="pick times" id="bTimes"></div><input type="hidden" id="bT">
   <label for="bTr">Treatment</label><select id="bTr">${trOpts(o.tr||'Checkup')}</select>
   <div class="foot"><button type="button" class="b" data-a="close">Cancel</button><button class="b pri" type="submit">Book</button></div></form>`);
   fillTimes(o.t);oldCheck();
 }
-function fillTimes(pre){const d=$('#bD').value;const fs=freeSlots(d);if(pre&&!fs.includes(pre))fs.unshift(pre);$('#bT').innerHTML=fs.length?fs.map(t=>`<option value="${t}" ${t===pre?'selected':''}>${t12(t)}</option>`).join(''):'<option value="">No free slot on this day</option>'}
+function fillTimes(pre){
+  const d=$('#bD').value,fs=freeSlots(d);if(pre&&!fs.includes(pre))fs.unshift(pre);
+  const days=[];for(let i=0;i<14&&days.length<4;i++){const x=addD(TODAY,i);if(slots(x).length)days.push(x)}
+  if(!days.includes(d))days.push(d);
+  $('#bDays').innerHTML=days.map(x=>`<button type="button" class="chip ${x===d?'on':''}" data-a="bday" data-id="${x}">${x===TODAY?'Today':x===TOM?'Tomorrow':fmtD(x)}</button>`).join('');
+  const sel=pre&&fs.includes(pre)?pre:fs[0]||'';$('#bT').value=sel;
+  $('#bTimes').innerHTML=fs.length?fs.map(t=>`<button type="button" class="chip ${t===sel?'on':''}" data-a="btime" data-id="${t}">${t12(t)}</button>`).join(''):'<div class="mut">No free time on this day. Pick another day.</div>';
+}
 function oldCheck(){const ph=norm($('#bPh').value);const p=ph.length>=12&&S.patients.find(x=>norm(x.phone)===ph);$('#bOld').textContent=p?'Existing patient: '+p.name:'';if(p&&!$('#bNm').value)$('#bNm').value=p.name}
 function doBook(){
   const ph=$('#bPh').value.trim(),nm=$('#bNm').value.trim(),d=$('#bD').value,t=$('#bT').value,tr=$('#bTr').value;
@@ -409,6 +438,8 @@ document.addEventListener('click',e=>{
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
     case 'setname':openName(id);break;
+    case 'bday':$('#bD').value=id;fillTimes();break;
+    case 'btime':$('#bT').value=id;for(const c of document.querySelectorAll('#bTimes .chip'))c.classList.toggle('on',c.dataset.id===id);break;
     case 'push':enablePush();break;
     case 'signout':sb.auth.signOut();break;
     case 'saveto':{const v=$('#cTo').value.trim();sb.from('clinics').update({connect_to:v}).eq('id',cid).then(({error})=>{if(error)toast('Could not save');else{clinicRow.connect_to=v;toast('Saved')}});break}
@@ -442,13 +473,18 @@ document.addEventListener('click',e=>{
   }
 });
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target;
-  if(f.id==='addLead'){const ph=$('#lPh').value;if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');const ex=S.patients.find(p=>norm(p.phone)===norm(ph));S.leads.push({id:uid(),phone:ph.trim(),name:ex?ex.name:'',src:$('#lSrc').value,at:Date.now(),status:'new',tries:0,note:ex?'Existing patient':''});lf='open';save();render();toast('Lead added')}
   if(f.id==='bookF')doBook();
   if(f.id==='nameF'){const v=$('#nNm').value.trim(),n=norm(ctx.phone);if(!v)return;
     for(const x of [...S.calls,...S.leads])if(norm(x.phone)===n)x.name=v;
     const p=S.patients.find(x=>norm(x.phone)===n);if(p)p.name=v;
     save();close();render();toast('Name saved')}
-  if(f.id==='logF'){const ph=$('#gPh').value;if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');const c={id:uid(),phone:String(ph).replace(/\D/g,'').slice(-10),at:Date.now(),status:'answered',dur:0,outcome:null,manual:true,note:$('#gNote').value.trim()};S.calls.push(c);save();tab='calls';render();openCall(c.id)}
+  if(f.id==='logF'){const ph=$('#gPh').value,nm=$('#gNm').value.trim(),k=(e.submitter&&e.submitter.dataset.k)||'talked';if(norm(ph).length!==12)return toast('Enter a 10-digit mobile number');
+    const phone=String(ph).replace(/\D/g,'').slice(-10),ex=S.patients.find(p=>norm(p.phone)===norm(phone));
+    if(nm){for(const x of [...S.calls,...S.leads])if(norm(x.phone)===norm(phone))x.name=nm;if(ex)ex.name=nm}
+    if(k==='talked'){const c={id:uid(),phone,at:Date.now(),status:'answered',dur:0,outcome:null,manual:true,note:'',name:nm||undefined};S.calls.push(c);save();tab='calls';render();openCall(c.id)}
+    else{const open=S.leads.find(l=>norm(l.phone)===norm(phone)&&(l.status==='new'||l.status==='callback'));
+      if(open){open.at=Date.now();if(nm)open.name=nm}else S.leads.push({id:uid(),phone,name:nm||(ex?ex.name:''),src:k==='missed'?'missed':'whatsapp',at:Date.now(),status:'new',tries:0,note:ex?'Existing patient':''});
+      save();close();tab='calls';render();toast('Added. Reply from the list.')}}
   if(f.id==='authF'){const mode=(e.submitter&&e.submitter.dataset.mode)||'in',em=$('#aEmail').value.trim(),pw=$('#aPass').value;
     cloudMsg=mode==='up'?'Creating account…':'Signing in…';render();
     (mode==='up'?sb.auth.signUp({email:em,password:pw}):sb.auth.signInWithPassword({email:em,password:pw})).then(({data,error})=>{
