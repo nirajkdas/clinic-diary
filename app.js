@@ -178,6 +178,11 @@ let tab='today',vDate=TODAY,lDate=TOM,lf='booked',q='',ctx={};
 const pt=id=>S.patients.find(p=>p.id===id)||{name:'?',phone:''};
 function nameFor(phone){const n=norm(phone);const p=S.patients.find(x=>norm(x.phone)===n);if(p&&p.name)return p.name;
   const named=[...S.leads,...S.calls].filter(x=>x.name&&norm(x.phone)===n).sort((a,b)=>(b.at||0)-(a.at||0))[0];return named?named.name:''}
+function callCount(phone){const n=norm(phone),t0=new Date();t0.setHours(0,0,0,0);
+  const mine=S.calls.filter(c=>norm(c.phone)===n);return{today:mine.filter(c=>c.at>=+t0).length,all:mine.length}}
+const ordn=k=>k+(k%100>=11&&k%100<=13?'th':['th','st','nd','rd'][k%10]||'th');
+function repeatTag(phone){const c=callCount(phone);
+  return c.today>=2?`<span class="tag hot">${ordn(c.today)} call today</span>`:c.all>=2?`<span class="tag">Called ${c.all}×</span>`:''}
 const nameBtn=(phone,has)=>`<button class="b sm ghost" data-a="setname" data-id="${esc(phone)}">${has?'Edit name':'+ Add name'}</button>`;
 const rule=n=>S.rules.find(r=>r.n===n);
 const ruleD=n=>{const r=rule(n);return r?+r.d:180};
@@ -259,7 +264,7 @@ function vToday(){
 
 function leadCard(l,full){
   const open=l.status==='new'||l.status==='callback',nm=nameFor(l.phone);
-  return `<div class="card ${l.status==='lost'?'done':''}"><div class="hd"><div><div class="big">${nm?esc(nm):show(l.phone)}</div><div class="tr">${nm?show(l.phone)+' · ':''}${SRC[l.src]} · ${ago(l.at)}${full&&l.tries?` · tried ${l.tries}×`:''}</div></div><span class="tag ${l.status==='new'?'hot':l.status==='booked'?'':'done'}">${LST[l.status]}</span></div>
+  return `<div class="card ${l.status==='lost'?'done':''}"><div class="hd"><div><div class="big">${nm?esc(nm):show(l.phone)}</div><div class="tr">${nm?show(l.phone)+' · ':''}${SRC[l.src]} · ${ago(l.at)}${full&&l.tries?` · tried ${l.tries}×`:''}</div></div><div style="text-align:right"><span class="tag ${l.status==='new'?'hot':l.status==='booked'?'':'done'}">${LST[l.status]}</span>${repeatTag(l.phone)}</div></div>
   ${full&&l.note?`<div class="hist">${esc(l.note)}</div>`:''}
   ${open?`<div class="acts">${waBtn(l.phone,msgMissed(),'lwa',l.id,'Send free slots')}${callBtn(l.phone,'lcall',l.id)}<button class="b sm pri" data-a="lbook" data-id="${l.id}">Book</button>${full?`<button class="b sm" data-a="lnoans" data-id="${l.id}">No answer</button><button class="b sm ghost" data-a="llost" data-id="${l.id}">Not interested</button>${nameBtn(l.phone,!!nm)}`:''}</div>`:full&&l.status==='lost'?`<div class="acts"><button class="b sm ghost" data-a="lopen" data-id="${l.id}">Reopen</button></div>`:''}</div>`;
 }
@@ -270,7 +275,7 @@ function callCard(c,full){
   const st=c.status==='missed'?'<span class="tag hot">Missed</span>':c.status==='ringing'?'<span class="tag">Ringing</span>':`<span class="tag">${c.manual?'Logged':'Talked '+mins+' min'}</span>`;
   const out=c.outcome?`<span class="tag done">${OUT[c.outcome]}</span>`:'';
   const need=c.status==='answered'&&!c.outcome;
-  return `<div class="card"><div class="hd"><div><div class="nm">${who}</div><div class="tr">${nm?show(c.phone)+' · ':''}${ago(c.at)}${c.note?' · '+esc(c.note):''}</div></div><div style="text-align:right">${st}${out}</div></div>
+  return `<div class="card"><div class="hd"><div><div class="nm">${who}</div><div class="tr">${nm?show(c.phone)+' · ':''}${ago(c.at)}${c.note?' · '+esc(c.note):''}</div></div><div style="text-align:right">${st}${out}${repeatTag(c.phone)}</div></div>
   ${need?`<div class="mut" style="margin-top:6px">What happened on this call?</div><div class="acts">${outBtns(c.id)}${p?'':nameBtn(c.phone,!!nm)}</div>`:''}
   ${full&&!need?`<div class="acts">${callBtn(c.phone)}${c.rec?`<a class="b sm" href="${esc(c.rec)}" target="_blank" rel="noopener">Recording</a>`:''}${c.outcome?`<button class="b sm ghost" data-a="cundo" data-id="${c.id}">Change label</button>`:''}${p?'':nameBtn(c.phone,!!nm)}</div>`:''}</div>`;
 }
@@ -278,7 +283,9 @@ const outBtns=id=>`<button class="b sm pri" data-a="cbook" data-id="${id}">Booke
 function vCalls(){
   const U=unlabelled().map(c=>({at:c.at,h:callCard(c,false)}));
   const L=S.leads.filter(l=>l.status==='new'||l.status==='callback').map(l=>({at:l.at,h:leadCard(l,true)}));
-  const todo=[...U,...L].sort((a,b)=>b.at-a.at);
+  const U2=unlabelled().map(c=>({at:c.at,p:c.phone,h:callCard(c,false)})),L2=S.leads.filter(l=>l.status==='new'||l.status==='callback').map(l=>({at:l.at,p:l.phone,h:leadCard(l,true)}));
+  const hot=x=>callCount(x.p).today>=2?1:0;
+  const todo=[...U2,...L2].sort((a,b)=>hot(b)-hot(a)||b.at-a.at);
   const done=S.leads.filter(l=>lf==='all'||l.status===lf).filter(l=>lf==='all'||l.status!=='new'&&l.status!=='callback').sort((a,b)=>b.at-a.at);
   const C=[['booked','Booked'],['lost','Not interested'],['all','All leads']];
   const log=[...S.calls].sort((a,b)=>b.at-a.at).filter(c=>!(c.status==='answered'&&!c.outcome)).slice(0,25);
