@@ -53,6 +53,7 @@ jobs:
           supabase functions deploy call-webhook --project-ref "$REF" --no-verify-jwt --yes
           supabase functions deploy push-key --project-ref "$REF" --no-verify-jwt --yes
           supabase functions deploy daily-digest --project-ref "$REF" --no-verify-jwt --yes
+          supabase functions deploy poll-calls --project-ref "$REF" --no-verify-jwt --yes
 
       - name: Point the app at this project
         if: env.SKIP != '1'

@@ -9,3 +9,7 @@ verify_jwt = false
 # Called by pg_cron with its own token (checked in the function).
 [functions.daily-digest]
 verify_jwt = false
+
+# Called by pg_cron every minute with its own token (checked in the function).
+[functions.poll-calls]
+verify_jwt = false

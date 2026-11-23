@@ -86,6 +86,7 @@ function save(){S.at=Date.now();saveLocal();schedulePush()}
 
 /* ---------- Cloud: login, sync, live updates, notifications ---------- */
 const CFG=window.CLINIC_CFG||{};
+let edesy={has:false,sync:null,err:null};
 let sb=null,user=null,cid=null,clinicRow=null,snap={},setSnap='',pushT=0,chan=null,cloudMsg='',syncState='',pushOn=false;
 const cloudReady=()=>!!(CFG.url&&CFG.anon&&window.supabase&&window.supabase.createClient);
 const settingsJSON=()=>JSON.stringify({set:S.set,rules:S.rules,tpl:S.tpl});
@@ -133,11 +134,12 @@ async function connect(){
       if(S.demo){const keep={rules:S.rules,tpl:S.tpl};S={...blank(),...keep,set:{...S.set}}}
       snap={};setSnap='';saveLocal();await pushNow();
     }
-    listen();cloudMsg='';syncState='ok';
+    listen();cloudMsg='';syncState='ok';loadEdesy();
     try{const reg=await navigator.serviceWorker?.ready;pushOn=!!(reg&&await reg.pushManager?.getSubscription())}catch(_){}
     render();routeHash();
   }catch(e){cloudMsg='Could not connect: '+(e.message||e);syncState='offline';render()}
 }
+async function loadEdesy(){try{const{data}=await sb.rpc('edesy_status');const r=data&&data[0];edesy={has:!!(r&&r.has_key),sync:r&&r.last_sync,err:r&&r.last_error};if(tab==='settings')render()}catch(_){}}
 function listen(){
   if(chan)sb.removeChannel(chan);
   chan=sb.channel('clinic-'+cid).on('postgres_changes',{event:'*',schema:'public',table:'records',filter:'clinic_id=eq.'+cid},p=>{
@@ -371,6 +373,9 @@ function vCloud(){
   return `<h2>Cloud and clinic line</h2><p style="margin:0">Signed in as <b>${esc(user.email||'')}</b>. ${syncState==='offline'?'<span class="tag hot">Offline, will retry</span>':'<span class="tag">Synced</span>'}</p>
   ${cloudMsg?`<p class="mut">${esc(cloudMsg)}</p>`:''}
   <label>Notifications</label>${pushOn?'<p class="mut" style="margin:0">On for this phone.</p>':`<button class="b pri" data-a="push">Turn on notifications</button>${isIOS&&!standalone?'<p class="mut">Add the app to your Home Screen first, then open it from the icon.</p>':''}`}
+  <label for="eKey">Edesy clinic line</label>
+  <p class="mut" style="margin:0 0 6px">${edesy.has?`Connected. ${edesy.err?'<span class="tag hot">Problem: '+esc(edesy.err)+'</span>':edesy.sync?'Last call synced '+ago(Date.parse(edesy.sync))+'.':'Waiting for the first call.'} Calls appear here within a minute.`:'Paste the API key from Edesy (forwarding.edesy.in → API Keys) so clinic calls show up here by themselves.'}</p>
+  <div class="row"><input id="eKey" type="password" autocomplete="off" placeholder="${edesy.has?'Saved. Paste a new key to replace':'sk_…'}" style="flex:1"><button class="b" data-a="savekey">Save</button></div>
   ${clinicRow?`<label for="cTo">Clinic line rings this number</label><div class="row"><input id="cTo" type="tel" inputmode="numeric" value="${esc(clinicRow.connect_to||'')}" placeholder="Your personal number" style="flex:1"><button class="b" data-a="saveto">Save</button></div>
   <details style="margin-top:12px"><summary class="mut" style="cursor:pointer">Call provider settings (for whoever sets up the line)</summary>
   <p class="mut" style="margin:8px 0 0">Edesy: Webhooks → Add endpoint → paste this URL, all call events. Keep it private: it works like a password.</p><label>Webhook URL</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base)}</code><button class="b sm" data-a="copytxt" data-id="${esc(base)}">Copy</button></div>
@@ -450,7 +455,7 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-a]');if(!el)return;const a=el.dataset.a,id=el.dataset.id;if(!a)return;
   const apt=()=>S.appts.find(x=>x.id===id),ld=()=>S.leads.find(x=>x.id===id),fu=()=>S.fus.find(x=>x.id===id);
   switch(a){
-    case 'tab':tab=id;if(id==='today')vDate=TODAY;render();scrollTo(0,0);break;
+    case 'tab':tab=id;if(id==='today')vDate=TODAY;if(id==='settings'&&sb&&cid)loadEdesy();render();scrollTo(0,0);break;
     case 'cbook':{const c=S.calls.find(x=>String(x.id)===String(id));const n=$('#cNote');if(n&&n.value.trim())c.note=n.value.trim();openBook({phone:c.phone,pid:c.pid,cid:c.id,name:nameFor(c.phone)});break}
     case 'cback':setOutcome(id,'callback');break;
     case 'cenq':setOutcome(id,'enquiry');break;
@@ -458,6 +463,7 @@ document.addEventListener('click',e=>{
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
     case 'setname':openName(id);break;
+    case 'savekey':{const k=$('#eKey').value.trim();if(!k)return toast('Paste the Edesy API key first');sb.rpc('set_edesy_key',{key:k}).then(({error})=>{if(error)toast('Could not save: '+error.message);else{$('#eKey').value='';toast('Saved. Calls will appear within a minute.');edesy.has=true;setTimeout(loadEdesy,70000);render()}});break}
     case 'remtom':tab='list';lDate=TOM;render();scrollTo(0,0);break;
     case 'dmode':ctx.mode=id;for(const c of document.querySelectorAll('#dModes .chip'))c.classList.toggle('on',c.dataset.id===id);for(const x of ['book','call'])$('#dm-'+x).hidden=x!==id;break;
     case 'bday':{const px=el.dataset.p||'b';$('#'+px+'D').value=id;fillTimes(null,px);break}
