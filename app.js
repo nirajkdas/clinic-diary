@@ -35,6 +35,11 @@ const KINDS=['patients','appts','fus','leads','calls'];
 const LST={new:'New',callback:'Call back',booked:'Booked',lost:'Not interested'};
 const RULES=[['Checkup','चेकअप',180],['Scaling / cleaning','दाँतों की सफ़ाई',180],['Filling','फिलिंग',180],['RCT sitting','RCT सिटिंग',7],['Cap after RCT','RCT के बाद कैप',14],['Extraction','दाँत निकालना',7],['Crown fitting','क्राउन फिटिंग',7],['Braces adjustment','ब्रेसेस एडजस्टमेंट',30],['Pain / emergency','दर्द का इलाज',3]];
 const TPL={
+missed:'नमस्ते! {clinic} ({address_hi}) में कॉल करने के लिए धन्यवाद। डॉक्टर अभी मरीज़ देख रही हैं, हम जल्द ही आपको वापस कॉल करेंगे।\n\nHello! Thank you for calling {clinic}, {address}. The doctor is with a patient right now. We will call you back soon.\n\n– {doctor}',
+remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} ({address_hi}) में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic}, {address} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
+follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
+noshow:'नमस्ते {name} जी,\nआज {time_hi} बजे आपका अपॉइंटमेंट था, आप नहीं आ पाए। कोई बात नहीं, नया समय चाहिए तो इसी नंबर पर बता दें।\n\nHello {name},\nWe missed you at your {time} appointment today. No problem, reply here if you would like a new time.\n\n– {doctor}'};
+const PREV2_TPL={
 missed:'नमस्ते! आपने {clinic} ({address_hi}) में कॉल किया था। उस समय डॉक्टर मरीज़ देख रही थीं, इसलिए कॉल नहीं उठ पाया।\nअपॉइंटमेंट के लिए खाली समय:\n{slots_hi}\nजो समय ठीक लगे, इसी नंबर पर अपने नाम के साथ जवाब दें।\n\nHello! You called {clinic}, {address}. The doctor was with a patient, so we could not take your call.\nAvailable slots:\n{slots}\nJust reply here with your name and the time that suits you.\n\n– {doctor}',
 remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} ({address_hi}) में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic}, {address} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
 follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
@@ -49,7 +54,7 @@ missed:'नमस्ते! आपने {clinic} में कॉल किय�
 remind:'नमस्ते {name} जी,\n{date_hi} को {time_hi} बजे {clinic} में आपका अपॉइंटमेंट है ({treatment_hi})। न आ पाएँ तो इसी नंबर पर बता दें।\n\nHello {name},\nYour appointment at {clinic} is {date} at {time} ({treatment}). If you cannot come, please reply here.\n\n– {doctor}',
 follow:'नमस्ते {name} जी,\n{clinic} से याद दिला रहे हैं: आपके {treatment_hi} का समय हो गया है। कब आना ठीक रहेगा? इसी नंबर पर जवाब दें।\n\nHello {name},\nA reminder from {clinic}: your {treatment} is due. When would you like to come? Just reply here.\n\n– {doctor}',
 noshow:'नमस्ते {name} जी,\nआज {time_hi} बजे आपका अपॉइंटमेंट था, आप नहीं आ पाए। कोई बात नहीं, नया समय चाहिए तो इसी नंबर पर बता दें।\n\nHello {name},\nWe missed you at your {time} appointment today. No problem, reply here if you would like a new time.\n\n– {doctor}'};
-const TPLN={missed:'Reply to a missed call',remind:'Appointment reminder',follow:'Follow-up due',noshow:'Did not come'};
+const TPLN={missed:'Missed call: we will call you back',remind:'Appointment reminder',follow:'Follow-up due',noshow:'Did not come'};
 
 function seed(){
   const P=[['Sunita Devi','9000000101'],['Ramesh Yadav','9000000102'],['Anjali Kumari','9000000103'],['Mohammad Arif','9000000104'],['Priya Singh','9000000105'],['Vikas Jha','9000000106'],['Geeta Mandal','9000000107'],['Rahul Sah','9000000108']].map(([name,phone])=>({id:uid(),name,phone}));
@@ -80,13 +85,13 @@ if(!S.set.remindAt)S.set.remindAt='18:00';
 if(!S.set.addr){S.set.addr='Mangal Bazar, Katihar';S.set.addr_hi='मंगल बाज़ार, कटिहार'}
 if(S.demo||/^(Smile Dental Clinic|My Dental Clinic)$/.test(S.set.clinic)){S.set.clinic='Gupta Dental Care & Hospital';}
 if(/^Dr\. (Neha|Gupta)?$/.test((S.set.doctor||'').trim()))S.set.doctor='Dr. Saloni Kumari';
-for(const k of Object.keys(TPL))if(!S.tpl[k]||S.tpl[k]===OLD_TPL[k]||S.tpl[k]===PREV_TPL[k])S.tpl[k]=TPL[k];
+for(const k of Object.keys(TPL))if(!S.tpl[k]||S.tpl[k]===OLD_TPL[k]||S.tpl[k]===PREV_TPL[k]||S.tpl[k]===PREV2_TPL[k])S.tpl[k]=TPL[k];
 function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function save(){S.at=Date.now();saveLocal();schedulePush()}
 
 /* ---------- Cloud: login, sync, live updates, notifications ---------- */
 const CFG=window.CLINIC_CFG||{};
-let edesy={has:false,sync:null,err:null};
+let edesy={has:false,sync:null,err:null},waCfg={has:false,campaign:null,err:null};
 let sb=null,user=null,cid=null,clinicRow=null,snap={},setSnap='',pushT=0,chan=null,cloudMsg='',syncState='',pushOn=false;
 const cloudReady=()=>!!(CFG.url&&CFG.anon&&window.supabase&&window.supabase.createClient);
 const settingsJSON=()=>JSON.stringify({set:S.set,rules:S.rules,tpl:S.tpl});
@@ -139,7 +144,7 @@ async function connect(){
     render();routeHash();
   }catch(e){cloudMsg='Could not connect: '+(e.message||e);syncState='offline';render()}
 }
-async function loadEdesy(){try{const{data}=await sb.rpc('edesy_status');const r=data&&data[0];edesy={has:!!(r&&r.has_key),sync:r&&r.last_sync,err:r&&r.last_error};if(tab==='settings')render()}catch(_){}}
+async function loadEdesy(){try{const w=await sb.rpc('wa_status');const x=w.data&&w.data[0];waCfg={has:!!(x&&x.has_key),campaign:x&&x.campaign,err:x&&x.last_error};}catch(_){}try{const{data}=await sb.rpc('edesy_status');const r=data&&data[0];edesy={has:!!(r&&r.has_key),sync:r&&r.last_sync,err:r&&r.last_error};if(tab==='settings')render()}catch(_){}}
 function listen(){
   if(chan)sb.removeChannel(chan);
   chan=sb.channel('clinic-'+cid).on('postgres_changes',{event:'*',schema:'public',table:'records',filter:'clinic_id=eq.'+cid},p=>{
@@ -264,9 +269,9 @@ function vToday(){
 
 function leadCard(l,full){
   const open=l.status==='new'||l.status==='callback',nm=nameFor(l.phone);
-  return `<div class="card ${l.status==='lost'?'done':''}"><div class="hd"><div><div class="big">${nm?esc(nm):show(l.phone)}</div><div class="tr">${nm?show(l.phone)+' · ':''}${SRC[l.src]} · ${ago(l.at)}${full&&l.tries?` · tried ${l.tries}×`:''}</div></div><div style="text-align:right"><span class="tag ${l.status==='new'?'hot':l.status==='booked'?'':'done'}">${LST[l.status]}</span>${repeatTag(l.phone)}</div></div>
+  return `<div class="card ${l.status==='lost'?'done':''}"><div class="hd"><div><div class="big">${nm?esc(nm):show(l.phone)}</div><div class="tr">${nm?show(l.phone)+' · ':''}${SRC[l.src]} · ${ago(l.at)}${full&&l.tries?` · tried ${l.tries}×`:''}</div></div><div style="text-align:right"><span class="tag ${l.status==='new'?'hot':l.status==='booked'?'':'done'}">${LST[l.status]}</span>${l.waSent?'<span class="tag">WhatsApp sent ✓</span>':''}${l.replied?'<span class="tag hot">Replied on WhatsApp</span>':''}${repeatTag(l.phone)}</div></div>
   ${full&&l.note?`<div class="hist">${esc(l.note)}</div>`:''}
-  ${open?`<div class="acts">${waBtn(l.phone,msgMissed(),'lwa',l.id,'Send free slots')}${callBtn(l.phone,'lcall',l.id)}<button class="b sm pri" data-a="lbook" data-id="${l.id}">Book</button>${full?`<button class="b sm" data-a="lnoans" data-id="${l.id}">No answer</button><button class="b sm ghost" data-a="llost" data-id="${l.id}">Not interested</button>${nameBtn(l.phone,!!nm)}`:''}</div>`:full&&l.status==='lost'?`<div class="acts"><button class="b sm ghost" data-a="lopen" data-id="${l.id}">Reopen</button></div>`:''}</div>`;
+  ${open?`<div class="acts">${waBtn(l.phone,msgMissed(),'lwa',l.id,'WhatsApp')}${callBtn(l.phone,'lcall',l.id)}<button class="b sm pri" data-a="lbook" data-id="${l.id}">Book</button>${full?`<button class="b sm" data-a="lnoans" data-id="${l.id}">No answer</button><button class="b sm ghost" data-a="llost" data-id="${l.id}">Not interested</button>${nameBtn(l.phone,!!nm)}`:''}</div>`:full&&l.status==='lost'?`<div class="acts"><button class="b sm ghost" data-a="lopen" data-id="${l.id}">Reopen</button></div>`:''}</div>`;
 }
 function callCard(c,full){
   const p=c.pid?pt(c.pid):S.patients.find(x=>norm(x.phone)===norm(c.phone));
@@ -302,7 +307,7 @@ function openCall(id){
   const c=S.calls.find(x=>String(x.id)===String(id));if(!c)return;
   const p=c.pid?pt(c.pid):S.patients.find(x=>norm(x.phone)===norm(c.phone));
   sheet(`<h3>${nameFor(c.phone)?esc(nameFor(c.phone)):show(c.phone)}</h3><div class="mut">${nameFor(c.phone)?show(c.phone)+' · ':''}${c.status==='answered'?'Talked '+Math.max(1,Math.round((c.dur||0)/60))+' min':'Missed call'} · ${ago(c.at)}</div>
-  ${c.status==='answered'?`<label for="cNote">Note (optional)</label><input id="cNote" placeholder="e.g. asked RCT price" value="${esc(c.note||'')}"><div class="acts" style="margin-top:12px">${outBtns(c.id)}</div>`:`<div class="acts" style="margin-top:12px">${waBtn(c.phone,msgMissed(),'',c.id,'Send free slots')}${callBtn(c.phone)}</div>`}
+  ${c.status==='answered'?`<label for="cNote">Note (optional)</label><input id="cNote" placeholder="e.g. asked RCT price" value="${esc(c.note||'')}"><div class="acts" style="margin-top:12px">${outBtns(c.id)}</div>`:`<div class="acts" style="margin-top:12px">${waBtn(c.phone,msgMissed(),'',c.id,'WhatsApp')}${callBtn(c.phone)}</div>`}
   <div class="foot"><button class="b" data-a="close">Close</button></div>`);
 }
 function openLog(){
@@ -383,6 +388,11 @@ function vCloud(){
   <label for="eKey">Edesy clinic line</label>
   <p class="mut" style="margin:0 0 6px">${edesy.has?`Connected. ${edesy.err?'<span class="tag hot">Problem: '+esc(edesy.err)+'</span>':edesy.sync?'Last call synced '+ago(Date.parse(edesy.sync))+'.':'Waiting for the first call.'} Calls appear here within a minute.`:'Paste the API key from Edesy (forwarding.edesy.in → API Keys) so clinic calls show up here by themselves.'}</p>
   <div class="row"><input id="eKey" type="password" autocomplete="off" placeholder="${edesy.has?'Saved. Paste a new key to replace':'sk_…'}" style="flex:1"><button class="b" data-a="savekey">Save</button></div>
+  <label for="waKey">Automatic WhatsApp on missed calls (AiSensy)</label>
+  <p class="mut" style="margin:0 0 6px">${waCfg.has?`On${waCfg.campaign?' · campaign "'+esc(waCfg.campaign)+'"':''}. ${waCfg.err?'<span class="tag hot">Problem: '+esc(waCfg.err)+'</span>':'New missed callers get the "we will call you back" message.'}`:'Paste the AiSensy API key and the API campaign name.'}</p>
+  <div class="two"><input id="waKey" type="password" autocomplete="off" placeholder="${waCfg.has?'Saved. Paste to replace':'AiSensy API key'}"><input id="waCamp" placeholder="Campaign name" value="${esc(waCfg.campaign||'')}"></div>
+  <div class="row" style="margin-top:8px"><button class="b" data-a="savewa">Save</button></div>
+  ${clinicRow?`<label>WhatsApp replies webhook (paste in AiSensy)</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(CFG.url+'/functions/v1/wa-webhook?t='+clinicRow.webhook_token)}</code><button class="b sm" data-a="copytxt" data-id="${esc(CFG.url+'/functions/v1/wa-webhook?t='+clinicRow.webhook_token)}">Copy</button></div>`:''}
   ${clinicRow?`<label for="cTo">Clinic line rings this number</label><div class="row"><input id="cTo" type="tel" inputmode="numeric" value="${esc(clinicRow.connect_to||'')}" placeholder="Your personal number" style="flex:1"><button class="b" data-a="saveto">Save</button></div>
   <details style="margin-top:12px"><summary class="mut" style="cursor:pointer">Call provider settings (for whoever sets up the line)</summary>
   <p class="mut" style="margin:8px 0 0">Edesy: Webhooks → Add endpoint → paste this URL, all call events. Keep it private: it works like a password.</p><label>Webhook URL</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base)}</code><button class="b sm" data-a="copytxt" data-id="${esc(base)}">Copy</button></div>
@@ -470,6 +480,7 @@ document.addEventListener('click',e=>{
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
     case 'setname':openName(id);break;
+    case 'savewa':{const k=$('#waKey').value.trim(),c=$('#waCamp').value.trim();if(!k&&!waCfg.has)return toast('Paste the AiSensy API key');if(!c)return toast('Type the campaign name');sb.rpc('set_aisensy',{key:k,campaign:c}).then(({error})=>{if(error)toast('Could not save: '+error.message);else{$('#waKey').value='';toast('WhatsApp saved');loadEdesy()}});break}
     case 'savekey':{const k=$('#eKey').value.trim();if(!k)return toast('Paste the Edesy API key first');sb.rpc('set_edesy_key',{key:k}).then(({error})=>{if(error)toast('Could not save: '+error.message);else{$('#eKey').value='';toast('Saved. Calls will appear within a minute.');edesy.has=true;setTimeout(loadEdesy,70000);render()}});break}
     case 'remtom':tab='list';lDate=TOM;render();scrollTo(0,0);break;
     case 'dmode':ctx.mode=id;for(const c of document.querySelectorAll('#dModes .chip'))c.classList.toggle('on',c.dataset.id===id);for(const x of ['book','call'])$('#dm-'+x).hidden=x!==id;break;

@@ -68,6 +68,6 @@ export function applyEvent(
     ? { title: "Incoming: " + who, body: pat ? "Existing patient" : "New number", url: "#calls", tag: "call-" + call.id }
     : ev.answered
     ? { title: "Talked to " + who + " (" + mins + " min)", body: "What happened? Tap to label this call.", url: "#call-" + call.id, tag: "call-" + call.id }
-    : { title: "Missed call: " + who, body: "Tap to send free slots on WhatsApp.", url: "#calls", tag: "call-" + call.id };
+    : { title: "Missed call: " + who, body: "Tap to call back or message them.", url: "#calls", tag: "call-" + call.id };
   return { call, lead, push };
 }
