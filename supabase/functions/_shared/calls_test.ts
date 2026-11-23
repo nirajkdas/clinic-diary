@@ -15,7 +15,7 @@ Deno.test("start event: ringing call, patient recognised, no lead", () => {
   assertEquals(r.call.status, "ringing");
   assertEquals(r.call.pid, "p1");
   assertEquals(r.lead, null);
-  assertEquals(r.push.title, "Incoming: Ramesh Yadav");
+  assertEquals(r.push.title, "Incoming: Ramesh Yadav (90000 00102)");
 });
 
 Deno.test("answered call: logged with duration, asks for a label, no lead", () => {
@@ -76,5 +76,5 @@ Deno.test("a name typed earlier for a number is reused on its next call and lead
   const q = { t: "x", call_sid: "CA9", from: "+919811100000", status: "no-answer", duration: "0" };
   const past = [{ id: "c0", phone: "9811100000", at: 1, status: "answered" as const, dur: 60, outcome: "enquiry", name: "Sanjay Kumar" }];
   const r = applyEvent(null, readEvent(q), pats, [], q, 5, past);
-  assertEquals([r.call.name, r.lead?.name, r.push.title], ["Sanjay Kumar", "Sanjay Kumar", "Missed call: Sanjay Kumar"]);
+  assertEquals([r.call.name, r.lead?.name, r.push.title], ["Sanjay Kumar", "Sanjay Kumar", "Missed call: Sanjay Kumar (98111 00000)"]);
 });

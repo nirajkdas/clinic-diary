@@ -267,7 +267,7 @@ function vCalls(){
 function openCall(id){
   const c=S.calls.find(x=>String(x.id)===String(id));if(!c)return;
   const p=c.pid?pt(c.pid):S.patients.find(x=>norm(x.phone)===norm(c.phone));
-  sheet(`<h3>${nameFor(c.phone)?esc(nameFor(c.phone)):show(c.phone)}</h3><div class="mut">${c.status==='answered'?'Talked '+Math.max(1,Math.round((c.dur||0)/60))+' min':'Missed call'} · ${ago(c.at)}</div>
+  sheet(`<h3>${nameFor(c.phone)?esc(nameFor(c.phone)):show(c.phone)}</h3><div class="mut">${nameFor(c.phone)?show(c.phone)+' · ':''}${c.status==='answered'?'Talked '+Math.max(1,Math.round((c.dur||0)/60))+' min':'Missed call'} · ${ago(c.at)}</div>
   ${c.status==='answered'?`<label for="cNote">Note (optional)</label><input id="cNote" placeholder="e.g. asked RCT price" value="${esc(c.note||'')}"><div class="acts" style="margin-top:12px">${outBtns(c.id)}</div>`:`<div class="acts" style="margin-top:12px">${waBtn(c.phone,msgMissed(),'',c.id,'Send free slots')}${callBtn(c.phone)}</div>`}
   <div class="foot"><button class="b" data-a="close">Close</button></div>`);
 }

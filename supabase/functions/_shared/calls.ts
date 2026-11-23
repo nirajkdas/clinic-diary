@@ -60,7 +60,8 @@ export function applyEvent(
       }
     }
   }
-  const who = known || (call.phone ? call.phone.slice(0, 5) + " " + call.phone.slice(5) : "Unknown number");
+  const num = call.phone ? call.phone.slice(0, 5) + " " + call.phone.slice(5) : "";
+  const who = known ? known + (num ? " (" + num + ")" : "") : num || "Unknown number";
   const mins = Math.max(1, Math.round(call.dur / 60));
   const push = ev.event === "start"
     ? { title: "Incoming: " + who, body: pat ? "Existing patient" : "New number", url: "#calls", tag: "call-" + call.id }
