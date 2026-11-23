@@ -39,3 +39,9 @@ Deno.test("fetchLogs reads {data:[...]} pages with the API key", async () => {
   assertEquals(rows.length, 1);
   assertEquals(seen[0].includes("start_date=2026-11-23T00%3A00%3A00Z") && seen[0].endsWith("Bearer sk_test"), true);
 });
+
+Deno.test("a network caller name in the log is shown when the number is unknown", () => {
+  const q = logToEvent({ id: 9, caller_number: "8400025459", status: "no-answer", caller_name: "SANJAY KUMAR" })!;
+  const r = applyEvent(null, readEvent(q), [], [], q);
+  assertEquals([r.call.name, r.lead?.name, r.push.title], ["SANJAY KUMAR", "SANJAY KUMAR", "Missed call: SANJAY KUMAR (84000 25459)"]);
+});

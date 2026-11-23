@@ -27,9 +27,10 @@ export function readEvent(q: Record<string, string>) {
   const status = pick(q, "DialCallStatus", "Status", "CallStatus", "CallType").toLowerCase();
   const dur = Number(pick(q, "DialCallDuration", "ConversationDuration", "duration_sec", "Duration") || 0) || 0;
   const rec = pick(q, "RecordingUrl", "recording_url");
+  const netName = pick(q, "caller_name", "cnap_name", "calling_name", "CallerName", "cnam").trim();
   const missedWords = /no-answer|busy|failed|incomplete|client-hangup|canceled|cancelled|missed/;
   const answered = status === "answered" || (dur > 0 && !missedWords.test(status)) || (status === "completed" && dur > 0);
-  return { sid, from, event, status, dur, rec, answered };
+  return { sid, from, event, status, dur, rec, answered, netName };
 }
 
 export function applyEvent(
@@ -44,7 +45,7 @@ export function applyEvent(
   const typed = [...leads, ...pastCalls]
     .filter((x) => x.name && norm10(x.phone) === call.phone)
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))[0]?.name;
-  const known = pat?.name || typed || "";
+  const known = pat?.name || typed || ev.netName || "";
   if (known && !pat) call.name = known;
   let lead: Lead | null = null;
   if (ev.event !== "start") {

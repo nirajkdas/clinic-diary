@@ -4,6 +4,7 @@
 
 export type EdesyLog = {
   id: string | number; caller_number?: string; status?: string;
+  caller_name?: string; cnap_name?: string; calling_name?: string; caller_cnam?: string;
   duration_sec?: number; started_at?: string; answered_at?: string | null; ended_at?: string | null; created_at?: string;
 };
 
@@ -21,6 +22,8 @@ export function logToEvent(l: EdesyLog): Record<string, string> | null {
     caller: String(l.caller_number ?? ""),
     status: answered ? "completed" : status === "completed" ? "no-answer" : status,
     duration_sec: String(answered ? Math.max(dur, 1) : 0),
+    // Network (CNAP) name, if Edesy ever includes it in call logs.
+    caller_name: String(l.caller_name ?? l.cnap_name ?? l.calling_name ?? l.caller_cnam ?? "").trim(),
   };
 }
 
