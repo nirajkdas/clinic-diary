@@ -26,3 +26,16 @@ Deno.test("send uses the API campaign with +91 number and clinic name", async ()
   await sendMissedCall("k", "missed_call_busy", "08400025459", "Gupta Dental Care & Hospital", fake);
   assertEquals([sent.apiKey, sent.campaignName, sent.destination, sent.templateParams], ["k", "missed_call_busy", "+918400025459", ["Gupta Dental Care & Hospital"]]);
 });
+
+Deno.test("interakt send uses Basic key, +91 split, template name and hi language", async () => {
+  let sent: Record<string, unknown> = {}; let auth = ""; let url = "";
+  const fake = (async (u: string, init: RequestInit) => { url = u; auth = (init.headers as Record<string, string>).authorization; sent = JSON.parse(String(init.body)); return new Response('{"result":true,"id":"x"}'); }) as unknown as typeof fetch;
+  await sendMissedCall("KEY", "missed_call_busy", "918400025459", "Gupta Dental Care & Hospital", fake, "interakt");
+  assertEquals([url, auth, sent.countryCode, sent.phoneNumber, sent.type], ["https://api.interakt.ai/v1/public/message/", "Basic KEY", "+91", "8400025459", "Template"]);
+  assertEquals(sent.template, { name: "missed_call_busy", languageCode: "hi", bodyValues: ["Gupta Dental Care & Hospital"] });
+});
+
+Deno.test("interakt incoming message webhook gives phone, name, text", () => {
+  const body = { version: "1.0", type: "message_received", data: { customer: { id: "c1", channel_phone_number: "918400025459", traits: { name: "Ravi" } }, message: { message: "Call me back" } } };
+  assertEquals(parseInbound(body), [{ phone: "8400025459", name: "Ravi", text: "Call me back" }]);
+});

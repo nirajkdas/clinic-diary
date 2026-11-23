@@ -17,7 +17,8 @@ begin
     aisensy_error = null, updated_at = now();
 end $$;
 
-create or replace function public.wa_status() returns table(has_key boolean, campaign text, last_error text)
+drop function if exists public.wa_status();
+create function public.wa_status() returns table(has_key boolean, campaign text, last_error text)
 language sql stable security definer set search_path = public as $$
   select s.aisensy_key is not null, s.aisensy_campaign, s.aisensy_error
   from public.clinic_secrets s

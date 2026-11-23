@@ -91,7 +91,7 @@ function save(){S.at=Date.now();saveLocal();schedulePush()}
 
 /* ---------- Cloud: login, sync, live updates, notifications ---------- */
 const CFG=window.CLINIC_CFG||{};
-let edesy={has:false,sync:null,err:null},waCfg={has:false,campaign:null,err:null};
+let edesy={has:false,sync:null,err:null},waCfg={has:false,campaign:null,err:null,prov:'interakt'};
 let sb=null,user=null,cid=null,clinicRow=null,snap={},setSnap='',pushT=0,chan=null,cloudMsg='',syncState='',pushOn=false;
 const cloudReady=()=>!!(CFG.url&&CFG.anon&&window.supabase&&window.supabase.createClient);
 const settingsJSON=()=>JSON.stringify({set:S.set,rules:S.rules,tpl:S.tpl});
@@ -144,7 +144,7 @@ async function connect(){
     render();routeHash();
   }catch(e){cloudMsg='Could not connect: '+(e.message||e);syncState='offline';render()}
 }
-async function loadEdesy(){try{const w=await sb.rpc('wa_status');const x=w.data&&w.data[0];waCfg={has:!!(x&&x.has_key),campaign:x&&x.campaign,err:x&&x.last_error};}catch(_){}try{const{data}=await sb.rpc('edesy_status');const r=data&&data[0];edesy={has:!!(r&&r.has_key),sync:r&&r.last_sync,err:r&&r.last_error};if(tab==='settings')render()}catch(_){}}
+async function loadEdesy(){try{const w=await sb.rpc('wa_status');const x=w.data&&w.data[0];waCfg={has:!!(x&&x.has_key),campaign:x&&x.campaign,err:x&&x.last_error,prov:(x&&x.has_key&&x.provider)||'interakt'};}catch(_){}try{const{data}=await sb.rpc('edesy_status');const r=data&&data[0];edesy={has:!!(r&&r.has_key),sync:r&&r.last_sync,err:r&&r.last_error};if(tab==='settings')render()}catch(_){}}
 function listen(){
   if(chan)sb.removeChannel(chan);
   chan=sb.channel('clinic-'+cid).on('postgres_changes',{event:'*',schema:'public',table:'records',filter:'clinic_id=eq.'+cid},p=>{
@@ -199,6 +199,7 @@ const freeSlots=d=>slots(d).filter(t=>!busy(d,t)&&(d!==TODAY||tm(t)>nowM()+20));
 function nextFree(n){const o=[];for(let i=0;i<14&&o.length<n;i++){const d=addD(TODAY,i);for(const t of freeSlots(d)){o.push([d,t]);if(o.length>=n)break}}return o}
 const base=()=>({clinic:S.set.clinic,doctor:S.set.doctor,address:S.set.addr||'',address_hi:S.set.addr_hi||S.set.addr||''});
 const apptVars=a=>{const p=pt(a.pid);return {...base(),name:p.name,date:dateEn(a.date),date_hi:dateHi(a.date),time:t12(a.time),time_hi:tHi(a.time),treatment:a.tr,treatment_hi:trHi(a.tr)}};
+const waSentFor=ph=>S.leads.some(l=>norm(l.phone)===norm(ph)&&l.waSent&&Date.now()-l.waSent<864e5);
 const wa=(ph,txt)=>'https://wa.me/'+norm(ph)+'?text='+encodeURIComponent(txt);
 const msgRemind=a=>fill(S.tpl.remind,apptVars(a));
 const msgNoshow=a=>fill(S.tpl.noshow,apptVars(a));
@@ -307,7 +308,7 @@ function openCall(id){
   const c=S.calls.find(x=>String(x.id)===String(id));if(!c)return;
   const p=c.pid?pt(c.pid):S.patients.find(x=>norm(x.phone)===norm(c.phone));
   sheet(`<h3>${nameFor(c.phone)?esc(nameFor(c.phone)):show(c.phone)}</h3><div class="mut">${nameFor(c.phone)?show(c.phone)+' · ':''}${c.status==='answered'?'Talked '+Math.max(1,Math.round((c.dur||0)/60))+' min':'Missed call'} · ${ago(c.at)}</div>
-  ${c.status==='answered'?`<label for="cNote">Note (optional)</label><input id="cNote" placeholder="e.g. asked RCT price" value="${esc(c.note||'')}"><div class="acts" style="margin-top:12px">${outBtns(c.id)}</div>`:`<div class="acts" style="margin-top:12px">${waBtn(c.phone,msgMissed(),'',c.id,'WhatsApp')}${callBtn(c.phone)}</div>`}
+  ${c.status==='answered'?`<label for="cNote">Note (optional)</label><input id="cNote" placeholder="e.g. asked RCT price" value="${esc(c.note||'')}"><div class="acts" style="margin-top:12px">${outBtns(c.id)}</div>`:`${waSentFor(c.phone)?'<p class="mut" style="margin:10px 0 0">WhatsApp already sent ✓</p>':''}<a class="b wa" style="display:block;text-align:center;margin-top:12px;padding:14px;font-size:17px" href="${esc(wa(c.phone,msgMissed()))}" target="_blank" rel="noopener" data-a="wasent" data-id="${esc(c.phone)}">Send WhatsApp: busy, will call back</a><div class="acts" style="margin-top:10px">${callBtn(c.phone)}</div>`}
   <div class="foot"><button class="b" data-a="close">Close</button></div>`);
 }
 function openLog(){
@@ -388,11 +389,12 @@ function vCloud(){
   <label for="eKey">Edesy clinic line</label>
   <p class="mut" style="margin:0 0 6px">${edesy.has?`Connected. ${edesy.err?'<span class="tag hot">Problem: '+esc(edesy.err)+'</span>':edesy.sync?'Last call synced '+ago(Date.parse(edesy.sync))+'.':'Waiting for the first call.'} Calls appear here within a minute.`:'Paste the API key from Edesy (forwarding.edesy.in → API Keys) so clinic calls show up here by themselves.'}</p>
   <div class="row"><input id="eKey" type="password" autocomplete="off" placeholder="${edesy.has?'Saved. Paste a new key to replace':'sk_…'}" style="flex:1"><button class="b" data-a="savekey">Save</button></div>
-  <label for="waKey">Automatic WhatsApp on missed calls (AiSensy)</label>
-  <p class="mut" style="margin:0 0 6px">${waCfg.has?`On${waCfg.campaign?' · campaign "'+esc(waCfg.campaign)+'"':''}. ${waCfg.err?'<span class="tag hot">Problem: '+esc(waCfg.err)+'</span>':'New missed callers get the "we will call you back" message.'}`:'Paste the AiSensy API key and the API campaign name.'}</p>
-  <div class="two"><input id="waKey" type="password" autocomplete="off" placeholder="${waCfg.has?'Saved. Paste to replace':'AiSensy API key'}"><input id="waCamp" placeholder="Campaign name" value="${esc(waCfg.campaign||'')}"></div>
+  <label for="waProv">Automatic WhatsApp on missed calls</label>
+  <p class="mut" style="margin:0 0 6px">${waCfg.has?`On (${waCfg.prov==='interakt'?'Interakt':'AiSensy'}${waCfg.campaign?' · "'+esc(waCfg.campaign)+'"':''}). ${waCfg.err?'<span class="tag hot">Problem: '+esc(waCfg.err)+'</span>':'New missed callers get the "we will call you back" message.'}`:'Off. Until it is on, tap the missed-call notification and then Send WhatsApp.'}</p>
+  <select id="waProv"><option value="interakt"${waCfg.prov==='interakt'?' selected':''}>Interakt</option><option value="aisensy"${waCfg.prov==='aisensy'?' selected':''}>AiSensy</option></select>
+  <div class="two" style="margin-top:8px"><input id="waKey" type="password" autocomplete="off" placeholder="${waCfg.has?'Saved. Paste to replace':'API key'}"><input id="waCamp" placeholder="Template name" value="${esc(waCfg.campaign||'missed_call_busy')}"></div>
   <div class="row" style="margin-top:8px"><button class="b" data-a="savewa">Save</button></div>
-  ${clinicRow?`<label>WhatsApp replies webhook (paste in AiSensy)</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(CFG.url+'/functions/v1/wa-webhook?t='+clinicRow.webhook_token)}</code><button class="b sm" data-a="copytxt" data-id="${esc(CFG.url+'/functions/v1/wa-webhook?t='+clinicRow.webhook_token)}">Copy</button></div>`:''}
+  ${clinicRow?`<label>WhatsApp replies webhook (paste in Interakt / AiSensy)</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(CFG.url+'/functions/v1/wa-webhook?t='+clinicRow.webhook_token)}</code><button class="b sm" data-a="copytxt" data-id="${esc(CFG.url+'/functions/v1/wa-webhook?t='+clinicRow.webhook_token)}">Copy</button></div>`:''}
   ${clinicRow?`<label for="cTo">Clinic line rings this number</label><div class="row"><input id="cTo" type="tel" inputmode="numeric" value="${esc(clinicRow.connect_to||'')}" placeholder="Your personal number" style="flex:1"><button class="b" data-a="saveto">Save</button></div>
   <details style="margin-top:12px"><summary class="mut" style="cursor:pointer">Call provider settings (for whoever sets up the line)</summary>
   <p class="mut" style="margin:8px 0 0">Edesy: Webhooks → Add endpoint → paste this URL, all call events. Keep it private: it works like a password.</p><label>Webhook URL</label><div class="row"><code style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(base)}</code><button class="b sm" data-a="copytxt" data-id="${esc(base)}">Copy</button></div>
@@ -480,7 +482,7 @@ document.addEventListener('click',e=>{
     case 'cundo':{const c=S.calls.find(x=>String(x.id)===String(id));c.outcome=null;save();render();break}
     case 'logcall':openLog();break;
     case 'setname':openName(id);break;
-    case 'savewa':{const k=$('#waKey').value.trim(),c=$('#waCamp').value.trim();if(!k&&!waCfg.has)return toast('Paste the AiSensy API key');if(!c)return toast('Type the campaign name');sb.rpc('set_aisensy',{key:k,campaign:c}).then(({error})=>{if(error)toast('Could not save: '+error.message);else{$('#waKey').value='';toast('WhatsApp saved');loadEdesy()}});break}
+    case 'savewa':{const pv=$('#waProv').value,k=$('#waKey').value.trim(),c=$('#waCamp').value.trim();if(!k&&!(waCfg.has&&waCfg.prov===pv))return toast('Paste the API key');if(!c)return toast('Type the template name');sb.rpc('set_whatsapp',{provider:pv,key:k,template:c}).then(({error})=>{if(error)toast('Could not save: '+error.message);else{$('#waKey').value='';toast('WhatsApp saved');loadEdesy()}});break}
     case 'savekey':{const k=$('#eKey').value.trim();if(!k)return toast('Paste the Edesy API key first');sb.rpc('set_edesy_key',{key:k}).then(({error})=>{if(error)toast('Could not save: '+error.message);else{$('#eKey').value='';toast('Saved. Calls will appear within a minute.');edesy.has=true;setTimeout(loadEdesy,70000);render()}});break}
     case 'remtom':tab='list';lDate=TOM;render();scrollTo(0,0);break;
     case 'dmode':ctx.mode=id;for(const c of document.querySelectorAll('#dModes .chip'))c.classList.toggle('on',c.dataset.id===id);for(const x of ['book','call'])$('#dm-'+x).hidden=x!==id;break;
@@ -497,6 +499,7 @@ document.addEventListener('click',e=>{
     case 'done':openDone(apt());break;
     case 'noshow':{const x=apt();x.status='noshow';S.fus.push({id:uid(),pid:x.pid,due:TODAY,tr:x.tr,done:false});save();render();toast('Added to today\'s call list');break}
     case 'undo':{const x=apt();x.status='booked';save();render();break}
+    case 'wasent':{const ph=el.dataset.id;S.leads.filter(l=>norm(l.phone)===norm(ph)&&['new','callback'].includes(l.status)).forEach(l=>l.waSent=Date.now());save();setTimeout(()=>{close();render()},400);break}
     case 'rem':case 'remc':{const x=apt();if(x){x.rem=true;if(el.dataset.by)x.remBy=el.dataset.by;save();setTimeout(render,300)}if(a==='remc')close();break}
     case 'lf':lf=id;render();break;
     case 'ld':lDate=id;render();break;

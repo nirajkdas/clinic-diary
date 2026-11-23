@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   const { data: key } = await sb.from("app_keys").select("value").eq("name", "cron_token").maybeSingle();
   if (!key?.value || !same(req.headers.get("x-cron-token") ?? "", key.value)) return new Response("forbidden", { status: 403 });
 
-  const { data: secrets } = await sb.from("clinic_secrets").select("clinic_id,edesy_key,edesy_since,aisensy_key,aisensy_campaign").not("edesy_key", "is", null);
+  const { data: secrets } = await sb.from("clinic_secrets").select("clinic_id,edesy_key,edesy_since,aisensy_key,aisensy_campaign,wa_provider").not("edesy_key", "is", null);
   const report: Record<string, unknown>[] = [];
   for (const s of secrets ?? []) {
     try {
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
         // Missed call from a new lead: send the "busy, we will call you back" WhatsApp right away.
         if (lead && s.aisensy_key && s.aisensy_campaign && Date.now() - at < 30 * 60_000) {
           try {
-            await sendMissedCall(s.aisensy_key, s.aisensy_campaign, lead.phone, clinicName);
+            await sendMissedCall(s.aisensy_key, s.aisensy_campaign, lead.phone, clinicName, fetch, s.wa_provider === "interakt" ? "interakt" : "aisensy");
             (lead as Lead & { waSent?: number }).waSent = Date.now();
             push.body = "WhatsApp sent: we will call you back. Tap to call.";
           } catch (e) {
